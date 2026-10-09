@@ -1,4 +1,4 @@
-# SlipSlopes — Contractual Liquidity Intelligence
+# OndhoDeck — Contractual Liquidity Intelligence
 
 Hackathon prototype (LPL WealthX). A household can be wealthy on paper and still run out of cash: fund
 redemption gates, SBL collateral calls, private-fund capital calls and RSU tax bills tighten together in a
