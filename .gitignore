@@ -1,0 +1,18 @@
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.streamlit/secrets.toml
+exports/
+
+# Locally supplied source documents (third-party or personal) are not redistributed.
+# Synthetic demo contracts in data/demo/ are tracked.
+data/*.pdf
+
+# Logs, editor and OS files
+*.log
+.DS_Store
+.idea/
+.vscode/
+.dist/

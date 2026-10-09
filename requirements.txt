@@ -1,0 +1,11 @@
+# Tested with Python 3.11 and these versions.
+streamlit>=1.50,<2
+plotly>=6.0
+pandas>=2.2
+numpy>=1.26
+pymupdf>=1.26
+pydantic>=2.7,<3
+scipy>=1.13
+anthropic>=1.0
+python-dotenv>=1.0
+pytest>=8.0
