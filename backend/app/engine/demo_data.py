@@ -4,7 +4,7 @@ Demo Mode never invents contract text. Constraints come from running the
 rule-based extractor over (a) the supplied BREIT prospectus and (b) the
 clearly-labelled synthetic sample contracts in engine/fixtures/. If the
 BREIT PDF is missing, a snapshot of a previous rule-based extraction of that
-same PDF (fixtures/constraints_snapshot.json) is used and labelled as such.
+same PDF (fixtures/snapshots/breit.json) is used and labelled as such.
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ DEMO_DIR = Path(__file__).resolve().parent / "fixtures"
 REPO_ROOT = Path(__file__).resolve().parents[3]
 BREIT_PDF = Path(os.environ.get("SLIPSLOPES_BREIT_PDF",
                                 REPO_ROOT / "data" / "BREIT-Prospectus-with-previous-supplements.pdf"))
-SNAPSHOT = DEMO_DIR / "constraints_snapshot.json"
+SNAPSHOT = DEMO_DIR / "snapshots" / "breit.json"
 
 
 def demo_scenario() -> Scenario:

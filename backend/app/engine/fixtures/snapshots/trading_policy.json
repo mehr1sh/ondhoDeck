@@ -1,0 +1,37 @@
+{
+  "document_id": "Meta-Insider-Trading-Pol-e1183834",
+  "document_name": "Meta-Insider-Trading-Policy.pdf",
+  "method": "rule_based",
+  "constraints": [
+    {
+      "constraint_id": "Meta-Insider-Trading-Pol-e1183834:rsu_window",
+      "constraint_type": "trading_window",
+      "asset_key": "rsu",
+      "description": "Vested shares can be sold only in open windows",
+      "value": null,
+      "lower_bound": null,
+      "upper_bound": null,
+      "unit": null,
+      "timing": null,
+      "conditions": null,
+      "document_id": "Meta-Insider-Trading-Pol-e1183834",
+      "document_name": "Meta-Insider-Trading-Policy.pdf",
+      "pdf_page": 6,
+      "printed_page": null,
+      "document_section": null,
+      "evidence_quote": "Regular Closed Trading Period You may not trade in any security of Meta during the period beginning at market close on the last day of the middle month of any fiscal quarter of Meta and ending at market open on the second full trading day after the public release of earnings data for such fiscal quarter (a \"Regular Closed Trading Period\"). For example, if Meta announces its prior fiscal quarter earnings on the afternoon of Wednesday, July 28th, then the Regular Closed Trading Period will end at market open on Friday, July 30th, and you would potentially be able to trade in the \"open trading window\" from Friday, July 30th through market close on August 31st.",
+      "quote_verified": true,
+      "interpretation": "Closed from the end of each quarter's second month until the second full trading day after earnings, which come out late in the following quarter's first month: modelled as open in Feb, May, Aug and Nov (interpretation). Assumes the employee is not a 10b5-1 Designated Person, who may trade only under a 10b5-1 plan.",
+      "confidence": "high",
+      "source_type": "source_backed",
+      "review_status": "needs_review",
+      "extraction_method": "rule_based",
+      "corroborating_pages": [],
+      "original_value": null
+    }
+  ],
+  "pages_total": 13,
+  "pages_failed": [],
+  "excerpts_used": 0,
+  "messages": []
+}

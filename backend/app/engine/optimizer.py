@@ -61,7 +61,8 @@ LEVERS: list[Lever] = [
           lambda s, t: max(0.0, t.rsu_max_withholding_rate - t.rsu_withholding_rate),
           lambda s, c: c.withholding_time_value * s.total_rsu_vest_value,
           "time value of prepaying tax (per $ withheld)",
-          "Withholding election capped at max statutory rate (RSU grant notice)", 0.01),
+          ("Capped at the maximum statutory rate (IRS Pub. 15). Needs the employer to withhold above the 22% flat "
+           "rate: Meta's RSU agreement allows it at the Committee's discretion"), 0.01),
     Lever("lever_discretionary_cut", "Retime discretionary spending (months 1-6)", "$ / month",
           lambda s, t: s.monthly_discretionary,
           lambda s, c: 6 * c.discretionary_weight,

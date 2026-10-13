@@ -1,0 +1,37 @@
+{
+  "document_id": "Meta-RSU-Award-Agreement-70361dc6",
+  "document_name": "Meta-RSU-Award-Agreement-2025-Plan.pdf",
+  "method": "rule_based",
+  "constraints": [
+    {
+      "constraint_id": "Meta-RSU-Award-Agreement-70361dc6:rsu_award_withholding",
+      "constraint_type": "other",
+      "asset_key": "rsu",
+      "description": "Employer may withhold shares up to the maximum statutory amount",
+      "value": null,
+      "lower_bound": null,
+      "upper_bound": null,
+      "unit": null,
+      "timing": null,
+      "conditions": "At the direction and discretion of the Committee",
+      "document_id": "Meta-RSU-Award-Agreement-70361dc6",
+      "document_name": "Meta-RSU-Award-Agreement-2025-Plan.pdf",
+      "pdf_page": 3,
+      "printed_page": null,
+      "document_section": null,
+      "evidence_quote": "(iii) withholding Shares (including less than a whole Share) based on the Fair Market Value of the Shares that otherwise would be issued to Participant when Participant's RSUs are settled, provided that the Company does not withhold more than the amount of Shares necessary to satisfy the maximum statutory withholding amount",
+      "quote_verified": true,
+      "interpretation": "Withholding method is at the direction and discretion of the Committee, not a participant election: withholding above 22% is possible only if the employer chooses it.",
+      "confidence": "high",
+      "source_type": "source_backed",
+      "review_status": "needs_review",
+      "extraction_method": "rule_based",
+      "corroborating_pages": [],
+      "original_value": null
+    }
+  ],
+  "pages_total": 105,
+  "pages_failed": [],
+  "excerpts_used": 0,
+  "messages": []
+}
