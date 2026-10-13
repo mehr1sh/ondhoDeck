@@ -6,21 +6,31 @@ from __future__ import annotations
 
 import html
 import json
+import sys
 from dataclasses import asdict
+from pathlib import Path
 
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-from src.constraint_extractor import extract_rule_based, extract_with_llm
-from src.demo_data import SCENARIO_NOTES, demo_scenario, load_demo_documents
-from src.document_parser import normalize_text, parse_pdf_bytes
-from src.export import bundle_json, constraints_csv, results_bundle, simulation_csv, simulation_frame
-from src.llm_service import LLMError, get_config
-from src.optimizer import CostAssumptions, plan_prevention
-from src.reverse_stress import reverse_stress
-from src.schemas import ContractConstraint, ReviewStatus, SourceType
-from src.simulator import (
+# The liquidity engine lives in backend/app/engine/. Import it as a top-level `engine` package:
+# `app.engine` would collide with this script's own name.
+_BACKEND_APP = str(Path(__file__).resolve().parent / "backend" / "app")
+if _BACKEND_APP not in sys.path:
+    sys.path.insert(0, _BACKEND_APP)
+
+from engine.constraint_extractor import extract_rule_based, extract_with_llm  # noqa: E402
+from engine.demo_data import SCENARIO_NOTES, demo_scenario, load_demo_documents  # noqa: E402
+from engine.document_parser import normalize_text, parse_pdf_bytes  # noqa: E402
+from engine.export import (  # noqa: E402
+    bundle_json, constraints_csv, results_bundle, simulation_csv, simulation_frame,
+)
+from engine.llm_service import LLMError, get_config  # noqa: E402
+from engine.optimizer import CostAssumptions, plan_prevention  # noqa: E402
+from engine.reverse_stress import reverse_stress  # noqa: E402
+from engine.schemas import ContractConstraint, ReviewStatus, SourceType  # noqa: E402
+from engine.simulator import (  # noqa: E402
     ContractTerms, Scenario, simulate_contract_aware, simulate_naive, stress_usable_liquidity,
     terms_from_constraints,
 )
@@ -560,12 +570,17 @@ elif page == "Stress Simulation":
                                 key="w_cc_amount", min_value=0.0)
         mon = int(c[2].number_input("Capital call month", 1, 24, int(call["month"]), key="w_cc_month"))
         sc["capital_calls"] = [{"month": mon, "amount": amt}] + sc["capital_calls"][1:]
-        num(c[3], "RSU vest value (pre-stress)", "rsu_vest_value_prestress")
+        vest = sc["rsu_vests"][0] if sc["rsu_vests"] else {"month": 2, "value_prestress": 0.0, "tax_due_month": 4}
+        vest_value = c[3].number_input("RSU vest value (pre-stress)", value=float(vest["value_prestress"]),
+                                       step=1000.0, format="%.0f", key="w_rsu_vest_value", min_value=0.0)
         c = st.columns(4)
-        intin(c[0], "RSU vest month", "rsu_vest_month")
+        vest_month = int(c[0].number_input("RSU vest month", 1, 24, int(vest["month"]), key="w_rsu_vest_month"))
         pct(c[1], "Effective tax rate on RSU income", "rsu_effective_tax_rate",
             help="Scenario assumption: combined marginal federal + state rate")
-        intin(c[2], "RSU tax true-up month", "rsu_tax_due_month")
+        tax_month = int(c[2].number_input("RSU tax true-up month", 1, 24, int(vest["tax_due_month"]),
+                                          key="w_rsu_tax_due_month"))
+        sc["rsu_vests"] = ([{"month": vest_month, "value_prestress": vest_value, "tax_due_month": tax_month}]
+                           + sc["rsu_vests"][1:])
         num(c[3], "Cash floor in RSU windows (months)", "rsu_window_cash_floor_months", 1.0, "%.0f",
             help="Household policy assumption: while a trading window is open, sell vested RSUs to keep cash at "
                  "this many months of net spending.", maxv=24.0)
