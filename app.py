@@ -1,4 +1,4 @@
-"""SlipSlopes - Contractual Liquidity Intelligence (hackathon prototype).
+"""OndhoDeck - Contractual Liquidity Intelligence (hackathon prototype).
 
 Run:  streamlit run app.py
 """
@@ -25,7 +25,7 @@ from src.simulator import (
     terms_from_constraints,
 )
 
-st.set_page_config(page_title="SlipSlopes - Contractual Liquidity Intelligence", page_icon="◢",
+st.set_page_config(page_title="OndhoDeck - Contractual Liquidity Intelligence", page_icon="◢",
                    layout="wide", initial_sidebar_state="expanded")
 
 # --------------------------------------------------------------------------- #
@@ -201,7 +201,7 @@ def _terms_from_json(s: str) -> ContractTerms:
 PAGES = ["Portfolio Overview", "Contract Explorer", "Stress Simulation", "Reverse Stress Test",
          "Prevention Planner", "Export"]
 with st.sidebar:
-    st.markdown('<div class="brand">Slip<span>Slopes</span></div>'
+    st.markdown('<div class="brand">Ondho<span>Deck</span></div>'
                 '<div class="brand-sub">Contractual Liquidity Intelligence</div>', unsafe_allow_html=True)
     st.write("")
     page = st.radio("Navigate", PAGES, label_visibility="collapsed", key="nav")
@@ -793,13 +793,13 @@ elif page == "Export":
             if aware.has_shortfall else None)
     bundle = results_bundle(scenario, terms, cons, naive, aware, rs_export, plan)
     c = st.columns(4)
-    c[0].download_button("Constraints (CSV)", constraints_csv(cons), "slipslopes_constraints.csv", "text/csv",
+    c[0].download_button("Constraints (CSV)", constraints_csv(cons), "ondhodeck_constraints.csv", "text/csv",
                          width="stretch")
     c[1].download_button("Constraints (JSON)", json.dumps([x.model_dump(mode="json") for x in cons], indent=2),
-                         "slipslopes_constraints.json", "application/json", width="stretch")
-    c[2].download_button("Monthly simulation (CSV)", simulation_csv(naive, aware), "slipslopes_simulation.csv",
+                         "ondhodeck_constraints.json", "application/json", width="stretch")
+    c[2].download_button("Monthly simulation (CSV)", simulation_csv(naive, aware), "ondhodeck_simulation.csv",
                          "text/csv", width="stretch")
-    c[3].download_button("Full results bundle (JSON)", bundle_json(bundle), "slipslopes_results.json",
+    c[3].download_button("Full results bundle (JSON)", bundle_json(bundle), "ondhodeck_results.json",
                          "application/json", width="stretch")
     st.write("")
     st.markdown("**Bundle summary**")
