@@ -13,7 +13,7 @@ log = logging.getLogger("slipslopes.errors")
 
 
 class ApiError(Exception):
-    def __init__(self, status: int, code: str, message: str, details: dict | None = None,
+    def __init__(self, status: int, code: str, message: str, details: dict | list | None = None,
                  headers: dict | None = None):
         super().__init__(message)
         self.status, self.code, self.message, self.details, self.headers = status, code, message, details, headers

@@ -25,6 +25,10 @@ def test_asset_crud_and_validation(alice):
     a = alice.post(f"/households/{hid}/assets", json={"kind": "brokerage", "name": "Brokerage", "amount": "600000",
                                                       "currency": "usd", "pledged_to_sbl": True}).json()
     assert a["currency"] == "USD" and a["pledged_to_sbl"] is True
+    nulled = alice.patch(f"/assets/{a['id']}", json={"amount": None, "liquidity_notes": None})
+    assert nulled.status_code == 422 and nulled.json()["error"]["details"][0]["loc"] == ["amount"]
+    assert alice.patch(f"/assets/{a['id']}", json={"liquidity_notes": None}).status_code == 200  # nullable
+    assert alice.patch(f"/households/{hid}", json={"name": None}).status_code == 422
     upd = alice.patch(f"/assets/{a['id']}", json={"amount": "550000.50"}).json()
     assert upd["amount"] == "550000.50"
     assert alice.delete(f"/assets/{a['id']}").status_code == 204
