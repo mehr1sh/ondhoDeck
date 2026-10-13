@@ -2,7 +2,7 @@
 
 Hackathon prototype (LPL WealthX). A household can be wealthy on paper and still run out of cash: fund
 redemption gates, SBL collateral calls, private-fund capital calls and RSU tax bills tighten together in a
-downturn. SlipSlopes reads the contract terms, simulates them month by month, finds the first month cash
+downturn. OndhoDeck reads the contract terms, simulates them month by month, finds the first month cash
 runs out, and ranks costed ways to prevent it.
 
 - **AI interprets text** (optional): an LLM extracts liquidity terms from retrieved excerpts as schema-validated JSON.
@@ -47,9 +47,9 @@ cp .env.example .env   # set ANTHROPIC_API_KEY=...
 | Variable | Default | Purpose |
 |---|---|---|
 | `ANTHROPIC_API_KEY` | — | Enables "Extract with LLM" in the Contract Explorer |
-| `SLIPSLOPES_LLM_MODEL` | `claude-opus-5-5` | Extraction model |
-| `SLIPSLOPES_LLM_EFFORT` | `medium` | `low` / `medium` / `high` |
-| `SLIPSLOPES_LLM_FALLBACKS` | `1` | Server-side refusal fallback (`0` to disable) |
+| `ONDHODECK_LLM_MODEL` | `claude-opus-5-5` | Extraction model |
+| `ONDHODECK_LLM_EFFORT` | `medium` | `low` / `medium` / `high` |
+| `ONDHODECK_LLM_FALLBACKS` | `1` | Server-side refusal fallback (`0` to disable) |
 
 How a PDF goes through the pipeline:
 

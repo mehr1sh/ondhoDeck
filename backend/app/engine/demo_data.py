@@ -33,7 +33,7 @@ def demo_scenario() -> Scenario:
 
 # Provenance labels shown next to scenario inputs in the UI.
 SCENARIO_NOTES: dict[str, str] = {
-    "holdings": "Synthetic household from the SlipSlopes presentation ($1.80M paper assets).",
+    "holdings": "Synthetic household from the OndhoDeck presentation ($1.80M paper assets).",
     "flows": "Synthetic monthly income/expenses.",
     "stress": "Scenario assumption: 2022-style equity drawdown path (linear to trough, hold, partial recovery).",
     "betas": "Scenario assumption: sensitivity of each asset's value to the equity drawdown.",

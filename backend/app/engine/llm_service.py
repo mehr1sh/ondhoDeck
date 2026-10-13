@@ -36,9 +36,9 @@ class LLMConfig:
 def get_config() -> LLMConfig:
     return LLMConfig(
         api_key=os.getenv("ANTHROPIC_API_KEY") or None,
-        model=os.getenv("SLIPSLOPES_LLM_MODEL", "claude-opus-5-5"),
-        effort=os.getenv("SLIPSLOPES_LLM_EFFORT", "medium"),
-        fallbacks=os.getenv("SLIPSLOPES_LLM_FALLBACKS", "1") != "0",
+        model=os.getenv("ONDHODECK_LLM_MODEL", "claude-opus-5-5"),
+        effort=os.getenv("ONDHODECK_LLM_EFFORT", "medium"),
+        fallbacks=os.getenv("ONDHODECK_LLM_FALLBACKS", "1") != "0",
     )
 
 
