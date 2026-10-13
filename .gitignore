@@ -7,8 +7,9 @@ __pycache__/
 exports/
 
 # Locally supplied source documents (third-party or personal) are not redistributed.
-# Synthetic demo contracts in data/demo/ are tracked.
+# Extraction snapshots in backend/app/engine/fixtures/snapshots/ are tracked so the demo runs without them.
 data/*.pdf
+data/sources/
 
 # Logs, editor and OS files
 *.log
