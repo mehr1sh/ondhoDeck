@@ -58,6 +58,8 @@ def normalize_text(s: str) -> str:
     """Canonical form for quote matching: straight quotes, no hyphen breaks, single spaces."""
     s = s.replace("’", "'").replace("‘", "'").replace("“", '"').replace("”", '"')
     s = s.replace("—", "-").replace("–", "-").replace(" ", " ")
+    for lig, plain in (("ﬁ", "fi"), ("ﬂ", "fl"), ("ﬀ", "ff"), ("ﬃ", "ffi"), ("ﬄ", "ffl")):
+        s = s.replace(lig, plain)
     s = re.sub(r"(\w)-\s*\n\s*(\w)", r"\1\2", s)  # de-hyphenate line breaks
     s = re.sub(r"\s+", " ", s)
     return s.strip()
