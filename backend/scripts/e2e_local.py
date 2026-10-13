@@ -103,7 +103,7 @@ def upload(api: Api, hid: str, data: bytes, name: str, category: str) -> dict:
 
 
 def main() -> None:
-    prospectus = Path(sys.argv[1]) if len(sys.argv) > 1 else None
+    prospectus = Path(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1] else None
     stamp = uuid.uuid4().hex[:8]
     a_email, b_email, pw = f"advisor-{stamp}@example.com", f"other-{stamp}@example.com", "Correct-Horse-91!"
 
