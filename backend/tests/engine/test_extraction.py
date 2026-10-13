@@ -43,6 +43,11 @@ def test_qualitative_breit_rules_have_no_numeric_value(breit):
     assert "none at all" in types[ConstraintType.BOARD_DISCRETION].evidence_quote
 
 
+def test_quote_verification_ignores_ligatures():
+    page = "Supplemental wages are withheld at a \ufb02at rate after noti\ufb01cation for the \ufb01scal year."
+    assert verify_quote("withheld at a flat rate after notification for the fiscal year", page)
+
+
 def test_evidence_and_pages_stay_attached_through_review_and_terms():
     paths = ensure_synthetic_docs(DEMO_DIR)
     cons = [c for p in paths for c in extract_rule_based(parse_pdf(p)).constraints]
