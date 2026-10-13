@@ -1,9 +1,15 @@
 import pytest
 
-from src.demo_data import demo_scenario
-from src.simulator import (
-    HORIZON_MONTHS, ContractTerms, Scenario, pro_rata_fill, reit_fund_capacity_pct,
-    simulate_contract_aware, simulate_naive, stress_usable_liquidity,
+from app.engine.demo_data import demo_scenario
+from app.engine.simulator import (
+    HORIZON_MONTHS,
+    ContractTerms,
+    Scenario,
+    pro_rata_fill,
+    reit_fund_capacity_pct,
+    simulate_contract_aware,
+    simulate_naive,
+    stress_usable_liquidity,
 )
 
 
@@ -72,7 +78,7 @@ def test_cash_accounting_identity_and_first_shortfall():
 
 
 def test_no_shortfall_without_stress_or_obligations():
-    s = Scenario(equity_drawdown=0.0, capital_calls=[], rsu_vest_value_prestress=0.0)
+    s = Scenario(equity_drawdown=0.0, capital_calls=[], rsu_vests=[])
     res = simulate_contract_aware(s)
     assert res.first_shortfall_month is None
     assert res.shortfall_amount == 0.0

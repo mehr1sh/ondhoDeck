@@ -1,12 +1,12 @@
 import pytest
 
-from src.constraint_extractor import QUALITATIVE_TYPES, extract_rule_based, extract_with_llm, verify_quote
-from src.demo_data import BREIT_PDF, DEMO_DIR
-from src.document_parser import parse_pdf
-from src.llm_service import LLMError
-from src.schemas import ConstraintType, ReviewStatus, SourceType
-from src.simulator import terms_from_constraints
-from src.synthetic_docs import ensure_synthetic_docs
+from app.engine.constraint_extractor import QUALITATIVE_TYPES, extract_rule_based, extract_with_llm, verify_quote
+from app.engine.demo_data import BREIT_PDF, DEMO_DIR
+from app.engine.document_parser import parse_pdf
+from app.engine.llm_service import LLMError
+from app.engine.schemas import ConstraintType, ReviewStatus, SourceType
+from app.engine.simulator import terms_from_constraints
+from app.engine.synthetic_docs import ensure_synthetic_docs
 
 breit_required = pytest.mark.skipif(not BREIT_PDF.exists(), reason="BREIT prospectus PDF not present")
 
@@ -84,7 +84,7 @@ def test_llm_output_strips_numbers_from_qualitative_clauses(monkeypatch):
          "timing": None, "conditions": None, "evidence_quote": "This sentence is not in the document.",
          "interpretation": "x", "confidence": "high", "ambiguous": False},
     ]}
-    monkeypatch.setattr("src.constraint_extractor.call_structured", lambda *a, **k: fake)
+    monkeypatch.setattr("app.engine.constraint_extractor.call_structured", lambda *a, **k: fake)
     report = extract_with_llm(doc)
     pr, fee = report.constraints
     assert pr.constraint_type in QUALITATIVE_TYPES and pr.value is None
@@ -101,7 +101,7 @@ def test_llm_malformed_output_retries_once_then_fails(monkeypatch):
         calls.append(1)
         return {"terms": [{"nonsense": True}]}
 
-    monkeypatch.setattr("src.constraint_extractor.call_structured", bad)
+    monkeypatch.setattr("app.engine.constraint_extractor.call_structured", bad)
     with pytest.raises(LLMError):
         extract_with_llm(doc)
     assert len(calls) == 2
@@ -109,13 +109,13 @@ def test_llm_malformed_output_retries_once_then_fails(monkeypatch):
 
 def test_missing_api_key_raises_informative_error(monkeypatch):
     monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
-    from src.llm_service import call_structured
+    from app.engine.llm_service import call_structured
     with pytest.raises(LLMError, match="ANTHROPIC_API_KEY"):
         call_structured("s", "u", {"type": "object"})
 
 
 def test_demo_falls_back_to_snapshot_when_breit_pdf_missing(monkeypatch, tmp_path):
-    import src.demo_data as dd
+    import app.engine.demo_data as dd
     monkeypatch.setattr(dd, "BREIT_PDF", tmp_path / "missing.pdf")
     docs, reports, msgs = dd.load_demo_documents()
     assert any("snapshot" in m for m in msgs)

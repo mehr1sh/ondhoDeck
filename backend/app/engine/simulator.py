@@ -18,15 +18,18 @@ Two models are provided:
 """
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
-from typing import Iterable, Optional
+from collections.abc import Iterable
+from dataclasses import dataclass, field
+from typing import Optional
 
 import pandas as pd
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from .schemas import AssetKey, ConstraintType, ContractConstraint, ReviewStatus
 
-HORIZON_MONTHS = 24
+HORIZON_MONTHS = 24          # default projection length; Scenario.horizon_months can extend it
+MAX_HORIZON_MONTHS = 120
+ENGINE_VERSION = "1.1.0"     # bump when simulation logic changes (persisted with every run)
 MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
 
 
@@ -35,12 +38,29 @@ MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "O
 # --------------------------------------------------------------------------- #
 
 class CapitalCall(BaseModel):
-    month: int = Field(ge=1, le=HORIZON_MONTHS)
+    month: int = Field(ge=1, le=MAX_HORIZON_MONTHS)
     amount: float = Field(ge=0)
+
+
+class RsuVest(BaseModel):
+    """A scheduled RSU vest; tax above the withholding rate is paid in cash at tax_due_month."""
+    month: int = Field(ge=1, le=MAX_HORIZON_MONTHS)
+    value_prestress: float = Field(ge=0)
+    tax_due_month: int = Field(ge=1, le=MAX_HORIZON_MONTHS)
+
+
+class ScheduledFlow(BaseModel):
+    """A one-off cash flow: 'tax' and 'outflow' reduce cash, 'inflow' adds cash."""
+    month: int = Field(ge=1, le=MAX_HORIZON_MONTHS)
+    amount: float = Field(ge=0)
+    category: str = Field(pattern="^(tax|outflow|inflow)$")
+    label: str = ""
 
 
 class Scenario(BaseModel):
     """All values are synthetic/illustrative unless sourced from a document."""
+    horizon_months: int = Field(HORIZON_MONTHS, ge=12, le=MAX_HORIZON_MONTHS)
+
     # Holdings at month 0 (pre-stress market values)
     cash: float = 250_000
     brokerage: float = 600_000          # taxable brokerage, fully pledged to the SBL
@@ -52,6 +72,8 @@ class Scenario(BaseModel):
     monthly_income: float = 35_000
     monthly_core_expenses: float = 30_000
     monthly_discretionary: float = 15_000
+    other_debt_service_monthly: float = 0.0   # payments on non-SBL liabilities (e.g. mortgage)
+    scheduled_flows: list[ScheduledFlow] = Field(default_factory=list)
 
     # Market stress path
     equity_drawdown: float = Field(0.25, ge=0, le=0.95)
@@ -69,11 +91,9 @@ class Scenario(BaseModel):
     # Private fund (unfunded commitment called on an assumed schedule)
     capital_calls: list[CapitalCall] = Field(default_factory=lambda: [CapitalCall(month=4, amount=250_000)])
 
-    # RSU vest and tax
-    rsu_vest_month: int = 2
-    rsu_vest_value_prestress: float = 300_000
+    # RSU vests and tax (the demo vest is $300K in month 2, tax true-up due in April)
+    rsu_vests: list[RsuVest] = Field(default_factory=lambda: [RsuVest(month=2, value_prestress=300_000, tax_due_month=4)])
     rsu_effective_tax_rate: float = 0.47   # combined marginal federal+state (assumption)
-    rsu_tax_due_month: int = 4             # April estimated-tax / true-up payment
     rsu_window_months: list[int] = Field(default_factory=lambda: [2, 5, 8, 11, 14, 17, 20, 23])
     # Household policy (assumption): in each open window, sell vested RSUs to keep cash >= N months of net spending
     rsu_window_cash_floor_months: float = Field(3.0, ge=0, le=24)
@@ -106,9 +126,21 @@ class Scenario(BaseModel):
 
     start_calendar_month: int = Field(1, ge=1, le=12)  # Month 1 = January
 
+    @model_validator(mode="after")
+    def _months_within_horizon(self) -> Scenario:
+        months = ([c.month for c in self.capital_calls] + [v.month for v in self.rsu_vests]
+                  + [f.month for f in self.scheduled_flows] + [self.reit_request_start_month])
+        if any(m > self.horizon_months for m in months):
+            raise ValueError(f"scheduled month beyond the {self.horizon_months}-month horizon")
+        return self
+
     @property
     def total_paper_assets(self) -> float:
         return self.cash + self.brokerage + self.reit + self.interval_fund + self.rsu_vested
+
+    @property
+    def total_rsu_vest_value(self) -> float:
+        return sum(v.value_prestress for v in self.rsu_vests)
 
 
 @dataclass
@@ -186,6 +218,14 @@ def terms_from_constraints(constraints: Iterable[ContractConstraint]) -> Contrac
 # Market path
 # --------------------------------------------------------------------------- #
 
+def _scheduled(s: Scenario, m: int) -> tuple[float, float, float]:
+    """(tax, other outflow, inflow) from one-off scheduled flows in month m."""
+    tax = sum(f.amount for f in s.scheduled_flows if f.month == m and f.category == "tax")
+    out = sum(f.amount for f in s.scheduled_flows if f.month == m and f.category == "outflow")
+    inc = sum(f.amount for f in s.scheduled_flows if f.month == m and f.category == "inflow")
+    return tax, out, inc
+
+
 def drawdown_at(s: Scenario, m: int) -> float:
     """Equity drawdown (fraction) at month m; month 0 is pre-stress."""
     D, T, H = s.equity_drawdown, s.months_to_trough, s.trough_hold_months
@@ -195,7 +235,7 @@ def drawdown_at(s: Scenario, m: int) -> float:
         return D * m / T
     if m <= T + H:
         return D
-    span = max(1, HORIZON_MONTHS - T - H)
+    span = max(1, s.horizon_months - T - H)
     return D * (1 - s.recovery_share * min(1.0, (m - T - H) / span))
 
 
@@ -319,7 +359,7 @@ def simulate_contract_aware(s: Scenario, t: ContractTerms | None = None) -> Simu
     current_q = quarter_index(s, 1)
     rows: list[dict] = []
 
-    for m in range(1, HORIZON_MONTHS + 1):
+    for m in range(1, s.horizon_months + 1):
         dd = drawdown_at(s, m)
         f_b = price_factor(s, m, s.beta_brokerage)
         f_rsu = price_factor(s, m, s.beta_rsu)
@@ -331,22 +371,30 @@ def simulate_contract_aware(s: Scenario, t: ContractTerms | None = None) -> Simu
         income = s.monthly_income
         discretionary = s.monthly_discretionary - (min(s.lever_discretionary_cut, s.monthly_discretionary) if m <= 6 else 0.0)
         expenses = s.monthly_core_expenses + discretionary
-        interest = loan * t.sbl_interest_rate / 12
+        interest = loan * t.sbl_interest_rate / 12 + s.other_debt_service_monthly
         cap_call = sum(c.amount for c in s.capital_calls if c.month == m)
         if cap_call:
             binding.append(f"Capital call ${cap_call:,.0f} due (GP discretion; not deferred for markets)")
 
         # RSU vest: shares withheld at the withholding rate, gap due later in cash
-        if m == s.rsu_vest_month:
-            vest_value = s.rsu_vest_value_prestress * f_rsu
-            rsu_u += s.rsu_vest_value_prestress * (1 - withholding)
+        for vest in s.rsu_vests:
+            if m != vest.month:
+                continue
+            vest_value = vest.value_prestress * f_rsu
+            rsu_u += vest.value_prestress * (1 - withholding)
             gap = max(0.0, (s.rsu_effective_tax_rate - withholding) * vest_value)
             if gap > 0:
-                due = max(m, s.rsu_tax_due_month)
+                due = max(m, vest.tax_due_month)
                 tax_due[due] = tax_due.get(due, 0.0) + gap
-        taxes = tax_due.get(m, 0.0)
-        if taxes:
-            binding.append(f"RSU tax true-up ${taxes:,.0f} (withheld {withholding:.0%} vs {s.rsu_effective_tax_rate:.0%} effective)")
+        rsu_tax = tax_due.get(m, 0.0)
+        if rsu_tax:
+            binding.append(f"RSU tax true-up ${rsu_tax:,.0f} (withheld {withholding:.0%} vs {s.rsu_effective_tax_rate:.0%} effective)")
+        other_tax, other_out, other_in = _scheduled(s, m)
+        taxes = rsu_tax + other_tax
+        expenses += other_out
+        income += other_in
+        if other_tax or other_out:
+            binding.append(f"Scheduled outflows ${other_tax + other_out:,.0f}")
 
         # SBL maintenance check on pledged brokerage
         collateral = broker_u * f_b
@@ -481,15 +529,17 @@ def simulate_naive(s: Scenario, t: ContractTerms | None = None) -> SimulationRes
              "rsu_vested": s.rsu_vested}
     betas = {"brokerage": s.beta_brokerage, "reit": s.beta_reit_nav, "interval_fund": s.beta_interval_nav,
              "rsu_vested": s.beta_rsu}
-    used = {k: 0.0 for k in units}  # $ of liquid allowance consumed (at sale-time prices)
     rows = []
-    for m in range(1, HORIZON_MONTHS + 1):
+    for m in range(1, s.horizon_months + 1):
         begin = cash
         discretionary = s.monthly_discretionary - (min(s.lever_discretionary_cut, s.monthly_discretionary) if m <= 6 else 0.0)
         expenses = s.monthly_core_expenses + discretionary
-        interest = loan * t.sbl_interest_rate / 12
+        interest = loan * t.sbl_interest_rate / 12 + s.other_debt_service_monthly
         cap_call = sum(c.amount for c in s.capital_calls if c.month == m)
-        cash = begin + s.monthly_income - expenses - interest - cap_call
+        other_tax, other_out, other_in = _scheduled(s, m)
+        expenses += other_out
+        income = s.monthly_income + other_in
+        cash = begin + income - expenses - interest - cap_call - other_tax
         sold = 0.0
         if cash < 0:
             need = -cash
@@ -506,7 +556,7 @@ def simulate_naive(s: Scenario, t: ContractTerms | None = None) -> SimulationRes
         values = {k: units[k] * price_factor(s, m, betas[k]) for k in units}
         rows.append({
             "month": m, "label": month_label(s, m), "equity_drawdown": drawdown_at(s, m),
-            "beginning_cash": begin, "income": s.monthly_income, "expenses": expenses, "taxes": 0.0,
+            "beginning_cash": begin, "income": income, "expenses": expenses, "taxes": other_tax,
             "debt_service": interest, "collateral_call": 0.0, "capital_call": cap_call,
             "asset_sales": sold, "ending_cash": cash, "shortfall": max(0.0, -cash),
             "naive_liquid_reserve": cash + sum(s.naive_liquid_fraction.get(k, 0) * v for k, v in values.items()),
@@ -534,7 +584,7 @@ def stress_usable_liquidity(s: Scenario, t: ContractTerms | None = None, window:
     probe = s.model_copy(update={
         "reit_redemption_target": s.reit, "interval_redemption_target": s.interval_fund,
         "reit_request_start_month": 1,
-        "capital_calls": [], "rsu_vest_value_prestress": 0.0,
+        "capital_calls": [], "rsu_vests": [], "scheduled_flows": [], "other_debt_service_monthly": 0.0,
         "monthly_income": 0.0, "monthly_core_expenses": 0.0, "monthly_discretionary": 0.0,
     })
     res = simulate_contract_aware(probe, t)

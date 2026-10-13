@@ -13,8 +13,9 @@ Two extraction paths share the same output schema:
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Optional
 
 from pydantic import ValidationError
 
@@ -22,8 +23,16 @@ from .document_parser import ParsedDocument, normalize_text
 from .llm_service import LLMError, call_structured
 from .retrieval import Excerpt, retrieve_excerpts
 from .schemas import (
-    LLM_OUTPUT_JSON_SCHEMA, AssetKey, Confidence, ConstraintType, ContractConstraint,
-    ExtractionMethod, ExtractionReport, LLMExtractionOutput, ReviewStatus, SourceType,
+    LLM_OUTPUT_JSON_SCHEMA,
+    AssetKey,
+    Confidence,
+    ConstraintType,
+    ContractConstraint,
+    ExtractionMethod,
+    ExtractionReport,
+    LLMExtractionOutput,
+    ReviewStatus,
+    SourceType,
 )
 from .synthetic_docs import is_synthetic_document
 
@@ -337,8 +346,14 @@ def _format_excerpts(excerpts: list[Excerpt]) -> str:
     return "\n\n".join(blocks)
 
 
-def extract_with_llm(doc: ParsedDocument, top_k: int = 8) -> ExtractionReport:
-    """LLM extraction over retrieved excerpts. Raises LLMError if the provider is unavailable."""
+def extract_with_llm(doc: ParsedDocument, top_k: int = 8,
+                     call: Callable[[str, str, dict], dict] | None = None) -> ExtractionReport:
+    """LLM extraction over retrieved excerpts. Raises LLMError if the provider is unavailable.
+
+    `call(system, user, json_schema) -> dict` performs one schema-constrained request; it defaults
+    to the environment-configured client in llm_service and is injected by the web worker/tests.
+    """
+    call = call or call_structured
     report = ExtractionReport(document_id=doc.document_id, document_name=doc.name,
                               method=ExtractionMethod.LLM, pages_total=doc.page_count,
                               pages_failed=list(doc.failed_pages))
@@ -356,7 +371,7 @@ def extract_with_llm(doc: ParsedDocument, top_k: int = 8) -> ExtractionReport:
         prompt = user if attempt == 0 else (
             user + f"\n\nYour previous answer failed validation ({last_err}). Return JSON matching the schema.")
         try:
-            raw = call_structured(SYSTEM_PROMPT, prompt, LLM_OUTPUT_JSON_SCHEMA)
+            raw = call(SYSTEM_PROMPT, prompt, LLM_OUTPUT_JSON_SCHEMA)
             parsed = LLMExtractionOutput.model_validate(raw)
             break
         except ValidationError as exc:
@@ -393,7 +408,7 @@ def extract_with_llm(doc: ParsedDocument, top_k: int = 8) -> ExtractionReport:
             constraint_id=f"{doc.document_id}:llm{i}", constraint_type=t.constraint_type,
             asset_key=t.asset_key, description=t.description, value=value, original_value=value,
             lower_bound=lo, upper_bound=hi, unit=t.unit, timing=t.timing,
-            conditions="; ".join(filter(None, [t.conditions] + notes)) or None,
+            conditions="; ".join(x for x in (t.conditions, *notes) if x) or None,
             document_id=doc.document_id, document_name=doc.name, pdf_page=page_no,
             printed_page=page.printed_page if page else None,
             document_section=page.section if page else None, evidence_quote=t.evidence_quote,

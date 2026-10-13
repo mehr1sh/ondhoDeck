@@ -10,10 +10,14 @@ the result is "the first failing grid point", not a mathematically exact boundar
 from __future__ import annotations
 
 from dataclasses import dataclass, field, replace
-from typing import Optional
+from typing import Any, Optional, cast
 
 from .simulator import (
-    RELAXATIONS, ContractTerms, Scenario, SimulationResult, simulate_contract_aware,
+    RELAXATIONS,
+    ContractTerms,
+    Scenario,
+    SimulationResult,
+    simulate_contract_aware,
 )
 
 
@@ -40,7 +44,7 @@ def _run(s: Scenario, t: ContractTerms, d: float) -> SimulationResult:
 def attribute_shortfall(s: Scenario, t: ContractTerms) -> list[dict]:
     """Counterfactual attribution: re-run with each contractual rule relaxed in turn."""
     base = simulate_contract_aware(s, t)
-    out = []
+    out: list[dict[str, Any]] = []
     for key, label in RELAXATIONS.items():
         alt = simulate_contract_aware(s, replace(t, relax=frozenset({key})))
         out.append({
@@ -91,19 +95,21 @@ def reverse_stress(s: Scenario, t: ContractTerms, max_drawdown: float = 0.60,
     if first_fail is None:
         return ReverseStressResult(found=False, method=method, grid=grid, grid_monotone=monotone,
                                    last_safe_drawdown=max_drawdown)
-    if first_fail == 0:
-        lo, hi = None, 0.0
-    else:
-        lo, hi = grid[first_fail - 1]["equity_drawdown"], grid[first_fail]["equity_drawdown"]
-        while hi - lo > tol:
-            mid = (lo + hi) / 2
+    lo: Optional[float] = None
+    hi: float = 0.0
+    if first_fail > 0:
+        lo_v, hi = cast(float, grid[first_fail - 1]["equity_drawdown"]), cast(float, grid[first_fail]["equity_drawdown"])
+        while hi - lo_v > tol:
+            mid = (lo_v + hi) / 2
             if _run(s, t, mid).has_shortfall:
                 hi = mid
             else:
-                lo = mid
+                lo_v = mid
+        lo = lo_v
     res = _run(s, t, hi)
     at_boundary = s.model_copy(update={"equity_drawdown": hi})
     fm = res.first_shortfall_month
+    assert fm is not None  # hi is a failing point by construction
     return ReverseStressResult(
         found=True, method=method, boundary_drawdown=hi, last_safe_drawdown=lo,
         first_shortfall_month=fm, shortfall_amount=res.shortfall_amount,

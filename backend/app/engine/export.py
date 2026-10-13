@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 import pandas as pd
 
@@ -58,7 +58,7 @@ def results_bundle(scenario: Scenario, terms: ContractTerms, constraints: list[C
     terms_d = asdict(terms)
     terms_d["relax"] = sorted(terms.relax)
     return {
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "disclaimer": ("Prototype output on a synthetic household. Not financial advice. Values marked "
                        "scenario_assumption are modelling inputs, not contract terms."),
         "scenario": scenario.model_dump(mode="json"),

@@ -3,15 +3,19 @@ import json
 import pandas as pd
 import pytest
 
-from src.demo_data import demo_scenario
-from src.export import (
-    CONSTRAINT_EXPORT_FIELDS, SIMULATION_EXPORT_FIELDS, bundle_json, constraints_csv, results_bundle,
+from app.engine.demo_data import demo_scenario
+from app.engine.export import (
+    CONSTRAINT_EXPORT_FIELDS,
+    SIMULATION_EXPORT_FIELDS,
+    bundle_json,
+    constraints_csv,
+    results_bundle,
     simulation_csv,
 )
-from src.optimizer import plan_prevention
-from src.reverse_stress import reverse_stress
-from src.schemas import AssetKey, ConstraintType, ContractConstraint, SourceType
-from src.simulator import ContractTerms, Scenario, simulate_contract_aware, simulate_naive
+from app.engine.optimizer import plan_prevention
+from app.engine.reverse_stress import reverse_stress
+from app.engine.schemas import AssetKey, ConstraintType, ContractConstraint, SourceType
+from app.engine.simulator import ContractTerms, Scenario, simulate_contract_aware, simulate_naive
 
 
 def test_reverse_stress_is_reproducible_and_brackets_boundary():
@@ -27,7 +31,7 @@ def test_reverse_stress_is_reproducible_and_brackets_boundary():
 
 
 def test_reverse_stress_handles_never_failing_scenario():
-    s = Scenario(cash=2_000_000, capital_calls=[], rsu_vest_value_prestress=0, sbl_loan_balance=0)
+    s = Scenario(cash=2_000_000, capital_calls=[], rsu_vests=[], sbl_loan_balance=0)
     r = reverse_stress(s, ContractTerms())
     assert not r.found and r.boundary_drawdown is None and r.first_shortfall_month is None
 
@@ -74,6 +78,6 @@ def test_exports_have_required_fields_and_values():
 
 def test_relaxing_any_contract_rule_never_worsens_the_shortfall():
     """Regression: a zero settlement lag used to drop same-month proceeds."""
-    from src.reverse_stress import attribute_shortfall
+    from app.engine.reverse_stress import attribute_shortfall
     for row in attribute_shortfall(demo_scenario(), ContractTerms()):
         assert row["shortfall_reduction"] >= -1e-6, row

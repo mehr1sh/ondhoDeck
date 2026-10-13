@@ -19,14 +19,18 @@ Costs are explicit, editable assumptions - not market quotes.
 """
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
-from typing import Callable, Optional
+from typing import Optional
 
 import numpy as np
 from scipy.optimize import linprog
 
 from .simulator import (
-    HORIZON_MONTHS, ContractTerms, Scenario, price_factor, simulate_contract_aware,
+    ContractTerms,
+    Scenario,
+    price_factor,
+    simulate_contract_aware,
 )
 
 
@@ -36,7 +40,7 @@ class Lever:
     name: str
     unit: str
     cap: Callable[[Scenario, ContractTerms], float]
-    cost_per_unit: Callable[[Scenario, "CostAssumptions"], float]
+    cost_per_unit: Callable[[Scenario, CostAssumptions], float]
     cost_basis: str
     constraints: str
     step: float  # finite-difference step
@@ -55,7 +59,7 @@ class CostAssumptions:
 LEVERS: list[Lever] = [
     Lever("lever_rsu_extra_withholding", "Raise RSU withholding at vest", "rate pts",
           lambda s, t: max(0.0, t.rsu_max_withholding_rate - t.rsu_withholding_rate),
-          lambda s, c: c.withholding_time_value * s.rsu_vest_value_prestress,
+          lambda s, c: c.withholding_time_value * s.total_rsu_vest_value,
           "time value of prepaying tax (per $ withheld)",
           "Withholding election capped at max statutory rate (RSU grant notice)", 0.01),
     Lever("lever_discretionary_cut", "Retime discretionary spending (months 1-6)", "$ / month",
@@ -130,10 +134,10 @@ def _cash_path(s: Scenario, t: ContractTerms) -> np.ndarray:
 def forced_liquidation_cost(s: Scenario, peak_shortfall: float) -> tuple[float, str]:
     """Cost of meeting the shortfall by selling brokerage at the trough instead of recovering."""
     trough = price_factor(s, s.months_to_trough, s.beta_brokerage)
-    end = price_factor(s, HORIZON_MONTHS, s.beta_brokerage)
+    end = price_factor(s, s.horizon_months, s.beta_brokerage)
     locked_in = max(0.0, end / trough - 1)
     rate = locked_in + s.sale_tax_drag
-    note = (f"Selling at the trough forgoes the modelled recovery to month 24 ({locked_in:.1%}) plus "
+    note = (f"Selling at the trough forgoes the modelled recovery to month {s.horizon_months} ({locked_in:.1%}) plus "
             f"{s.sale_tax_drag:.0%} tax/trading drag - and an unmet collateral call lets the lender choose "
             f"what to sell.")
     return peak_shortfall * rate, note
@@ -198,7 +202,7 @@ def plan_prevention(s: Scenario, t: ContractTerms, costs: CostAssumptions | None
         base_path = _cash_path(cur, t)
         if base_path.min() >= buffer - 0.5:
             break
-        S = np.zeros((HORIZON_MONTHS, len(levers)))
+        S = np.zeros((s.horizon_months, len(levers)))
         for j, lv in enumerate(levers):
             # Wide secant (10% of the lever's range) so threshold effects such as a collateral
             # call shifting by a month do not produce spurious local slopes.

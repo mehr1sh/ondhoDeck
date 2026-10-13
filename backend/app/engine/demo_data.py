@@ -2,13 +2,14 @@
 
 Demo Mode never invents contract text. Constraints come from running the
 rule-based extractor over (a) the supplied BREIT prospectus and (b) the
-clearly-labelled synthetic sample contracts generated into data/demo/. If the
+clearly-labelled synthetic sample contracts in engine/fixtures/. If the
 BREIT PDF is missing, a snapshot of a previous rule-based extraction of that
-same PDF (data/demo/constraints_snapshot.json) is used and labelled as such.
+same PDF (fixtures/constraints_snapshot.json) is used and labelled as such.
 """
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 
 from .constraint_extractor import extract_rule_based
@@ -17,10 +18,11 @@ from .schemas import ContractConstraint, ExtractionReport
 from .simulator import Scenario
 from .synthetic_docs import ensure_synthetic_docs
 
-ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = ROOT / "data"
-DEMO_DIR = DATA_DIR / "demo"
-BREIT_PDF = DATA_DIR / "BREIT-Prospectus-with-previous-supplements.pdf"
+DEMO_DIR = Path(__file__).resolve().parent / "fixtures"
+# Optional, not redistributed: place the prospectus here (or set SLIPSLOPES_BREIT_PDF) for live re-extraction.
+REPO_ROOT = Path(__file__).resolve().parents[3]
+BREIT_PDF = Path(os.environ.get("SLIPSLOPES_BREIT_PDF",
+                                REPO_ROOT / "data" / "BREIT-Prospectus-with-previous-supplements.pdf"))
 SNAPSHOT = DEMO_DIR / "constraints_snapshot.json"
 
 
