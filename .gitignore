@@ -16,3 +16,21 @@ data/*.pdf
 .idea/
 .vscode/
 .dist/
+
+# Local services and generated data
+.pgdata/
+.storage/
+backend/.storage/
+*.sqlite3
+.mypy_cache/
+.ruff_cache/
+
+# Frontend
+node_modules/
+.next/
+out/
+coverage/
+*.tsbuildinfo
+.env.local
+.env.*.local
+.vercel/

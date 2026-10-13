@@ -1,0 +1,75 @@
+# Render Blueprint: SlipSlopes API (web), background worker and queue.
+# Supabase provides PostgreSQL, Auth and Storage; the frontend deploys to Vercel.
+# Secrets use `sync: false`: Render prompts for them when the Blueprint is created.
+# See docs/DEPLOYMENT.md for the full procedure.
+
+envVarGroups:
+  - name: slipslopes-backend
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+      - key: LOG_LEVEL
+        value: INFO
+      - key: DATABASE_URL            # postgresql+psycopg://... (Supabase pooler, session mode)
+        sync: false
+      - key: SUPABASE_URL            # https://<project-ref>.supabase.co
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET     # optional: only for projects still issuing HS256 tokens
+        sync: false
+      - key: STORAGE_BACKEND
+        value: supabase
+      - key: STORAGE_BUCKET
+        value: documents
+      - key: CORS_ORIGINS            # e.g. https://slipslopes.vercel.app
+        sync: false
+      - key: LLM_PROVIDER            # none | anthropic
+        value: none
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: LLM_MODEL
+        value: claude-opus-5-5
+      - key: MAX_UPLOAD_MB
+        value: "50"
+      - key: OCR_ENABLED
+        value: "true"
+
+services:
+  - type: web
+    name: slipslopes-api
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    healthCheckPath: /api/v1/health
+    # Applies pending Alembic migrations before each deploy goes live (paid plans).
+    preDeployCommand: alembic upgrade head
+    envVars:
+      - fromGroup: slipslopes-backend
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: slipslopes-queue
+          property: connectionString
+
+  - type: worker
+    name: slipslopes-worker
+    runtime: docker
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    plan: starter
+    dockerCommand: celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2 -Q slipslopes
+    envVars:
+      - fromGroup: slipslopes-backend
+      - key: REDIS_URL
+        fromService:
+          type: keyvalue
+          name: slipslopes-queue
+          property: connectionString
+
+  - type: keyvalue
+    name: slipslopes-queue
+    plan: starter
+    maxmemoryPolicy: noeviction      # a job queue must never evict messages
+    ipAllowList: []                  # reachable only from services in this account
