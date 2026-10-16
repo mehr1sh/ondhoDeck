@@ -878,3 +878,48 @@ class ReportsOut(BaseModel):
     """Advisor-ready outputs across the caller's households (newest first)."""
     exports: list[ReportExportItem]
     blind_spot_reports: list[ReportBlindSpotItem]
+
+
+# ----------------------------------------------------------------------------- assistant chat
+
+class ChatCreate(BaseModel):
+    household_id: Optional[uuid.UUID] = None  # None = general conversation
+
+
+class ChatUpdate(BaseModel):
+    title: str = Field(min_length=1, max_length=120)
+
+
+class ChatMessageIn(BaseModel):
+    content: str = Field(min_length=1, max_length=8000)
+
+    @field_validator("content")
+    @classmethod
+    def _not_blank(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("Enter a message.")
+        return v.strip()
+
+
+class ChatMessageOut(ORM):
+    id: uuid.UUID
+    role: Literal["user", "assistant"]
+    content: str
+    provider: Optional[str]
+    model: Optional[str]
+    input_tokens: Optional[int]
+    output_tokens: Optional[int]
+    truncated: bool
+    created_at: datetime
+
+
+class ChatOut(ORM):
+    id: uuid.UUID
+    household_id: Optional[uuid.UUID]
+    title: str
+    created_at: datetime
+    updated_at: datetime
+
+
+class ChatDetailOut(ChatOut):
+    messages: list[ChatMessageOut]

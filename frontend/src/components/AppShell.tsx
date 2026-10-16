@@ -5,6 +5,7 @@ import { usePathname, useRouter } from "next/navigation";
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Brand } from "@/components/Brand";
+import { AssistantPanel, householdIdFromPath } from "@/components/assistant/AssistantPanel";
 import { Button, Spinner, cx } from "@/components/ui";
 import { endpoints } from "@/lib/endpoints";
 import { decideAuthRedirect } from "@/lib/authGuard";
@@ -22,6 +23,8 @@ export function useSession(): SessionContextValue {
   if (!ctx) throw new Error("useSession must be used inside AppShell");
   return ctx;
 }
+
+const ASSISTANT_OPEN_KEY = "ondhodeck.assistant.open";
 
 export interface NavItem {
   href: string;
@@ -129,6 +132,27 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => setDrawerOpen(false), [pathname]);
 
+  // Assistant: a floating box in the bottom-right corner, minimised to a button. Open by default on large
+  // screens and minimised on small ones until the advisor chooses; the choice is remembered in this browser.
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  useEffect(() => {
+    let stored: string | null = null;
+    try {
+      stored = window.localStorage.getItem(ASSISTANT_OPEN_KEY);
+    } catch {
+      // storage unavailable: use the default
+    }
+    setAssistantOpen(stored !== null ? stored === "true" : !!window.matchMedia?.("(min-width: 1024px)").matches);
+  }, []);
+  const showAssistant = (open: boolean) => {
+    setAssistantOpen(open);
+    try {
+      window.localStorage.setItem(ASSISTANT_OPEN_KEY, String(open));
+    } catch {
+      // storage unavailable: the choice lasts for this page view
+    }
+  };
+
   const [reviewCount, setReviewCount] = useState<number | null>(null);
   const refreshReviewCount = useCallback(() => {
     endpoints
@@ -206,10 +230,34 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
+        <main id="main" className="min-w-0 flex-1 px-4 pb-24 pt-6 sm:px-6 lg:px-12 lg:pt-10">
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>
+
+      {/* One assistant instance stays mounted on every page (minimising only hides it), so a conversation and
+          a reply being streamed survive navigation. */}
+      <div
+        id="assistant-panel"
+        className={cx(
+          "fixed bottom-4 right-4 z-40 h-[min(640px,calc(100vh-6rem))] w-[calc(100vw-2rem)] max-w-[400px]",
+          "flex-col overflow-hidden rounded-lg border border-line-strong bg-surface shadow-2xl",
+          assistantOpen ? "flex" : "hidden",
+        )}
+      >
+        <AssistantPanel householdId={householdIdFromPath(pathname)} onHide={() => showAssistant(false)} />
+      </div>
+      {!assistantOpen && (
+        <Button
+          variant="accent"
+          onClick={() => showAssistant(true)}
+          aria-controls="assistant-panel"
+          aria-expanded={false}
+          className="fixed bottom-4 right-4 z-40 px-5 shadow-lg"
+        >
+          Assistant
+        </Button>
+      )}
       </ReviewCountContext.Provider>
     </SessionContext.Provider>
   );

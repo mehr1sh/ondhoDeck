@@ -7,6 +7,7 @@ from .base import (
     DEFAULT_MODELS,
     PROVIDER_LABELS,
     PROVIDERS,
+    ChatTurn,
     ConnectionResult,
     LLMProvider,
     ProviderError,
@@ -15,7 +16,7 @@ from .base import (
 )
 from .openai_adapter import OpenAIProvider
 
-__all__ = ["AnthropicProvider", "OpenAIProvider", "LLMProvider", "ProviderError", "TransientProviderError",
+__all__ = ["AnthropicProvider", "OpenAIProvider", "LLMProvider", "ProviderError", "TransientProviderError", "ChatTurn",
            "ConnectionResult", "Usage", "PROVIDERS", "PROVIDER_LABELS", "DEFAULT_MODELS", "build_provider",
            "get_provider"]
 

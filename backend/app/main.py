@@ -18,6 +18,7 @@ from .logging_config import configure_logging
 from .routers import (
     ai_providers,
     analysis,
+    assistant,
     constraints,
     documents,
     exports,
@@ -65,7 +66,8 @@ def create_app() -> FastAPI:
         return response
 
     for r in (health.router, households.router, financials.router, documents.router, constraints.router,
-              analysis.router, exports.router, ai_providers.router, firms.router, funds.router, workspace.router):
+              analysis.router, exports.router, ai_providers.router, firms.router, funds.router, workspace.router,
+              assistant.router):
         app.include_router(r, prefix="/api/v1")
     return app
 

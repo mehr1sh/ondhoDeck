@@ -9,7 +9,7 @@ import pytest
 
 from app.engine.llm_service import LLMError
 from app.llm.anthropic_adapter import AnthropicProvider
-from app.llm.base import ProviderError, TransientProviderError
+from app.llm.base import ChatTurn, ProviderError, TransientProviderError
 from app.llm.openai_adapter import OpenAIProvider
 
 KEY = "sk-test-NOT-A-REAL-KEY-abcdef0123456789"
@@ -19,6 +19,25 @@ SCHEMA = {"type": "object", "properties": {"terms": {"type": "array"}}, "require
 
 def _resp(status: int):
     return httpx.Response(status, request=httpx.Request("POST", "https://api.example.test/v1"))
+
+
+class _Stream:
+    """Context-managed stream: iterates events (OpenAI) or exposes text_stream + get_final_message (Anthropic)."""
+
+    def __init__(self, items, final=None):
+        self.items, self.final, self.text_stream = items, final, iter(items)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def __iter__(self):
+        return iter(self.items)
+
+    def get_final_message(self):
+        return self.final
 
 
 class FakeOpenAI:
@@ -35,7 +54,7 @@ class FakeOpenAI:
         FakeOpenAI.calls.append(kw)
         if FakeOpenAI.error:
             raise FakeOpenAI.error
-        return FakeOpenAI.result
+        return _Stream(FakeOpenAI.result) if kw.get("stream") else FakeOpenAI.result
 
 
 @pytest.fixture
@@ -112,7 +131,7 @@ class FakeAnthropic:
     def __init__(self, api_key, timeout, max_retries, default_headers=None):
         assert api_key == KEY
         FakeAnthropic.headers.append(default_headers)
-        self.messages = NS(create=self._create)
+        self.messages = NS(create=self._create, stream=self._stream)
         self.models = NS(retrieve=self._retrieve, list=lambda limit: NS(data=[NS(id="b"), NS(id="a")]))
 
     def _create(self, **kw):
@@ -120,6 +139,12 @@ class FakeAnthropic:
         if FakeAnthropic.error:
             raise FakeAnthropic.error
         return FakeAnthropic.result
+
+    def _stream(self, **kw):
+        FakeAnthropic.calls.append(kw)
+        if FakeAnthropic.error:
+            raise FakeAnthropic.error
+        return _Stream(FakeAnthropic.result.texts, final=FakeAnthropic.result)
 
     def _retrieve(self, model):
         if FakeAnthropic.error:
@@ -200,3 +225,78 @@ def test_other_400s_show_provider_detail_with_key_redacted(fake_anthropic):
     fake_anthropic.error = _bad_request(f"thinking.type: disabled is not supported for this model ({KEY})")
     r = AnthropicProvider(api_key=KEY, model="claude-opus-5-5").test_connection()
     assert r.code == "request_rejected" and "thinking.type" in r.message and KEY not in r.message
+
+
+TURNS = [ChatTurn("user", "Hi"), ChatTurn("assistant", "Hello."), ChatTurn("user", "When does cash run out?")]
+
+
+def anthropic_chat(texts=("Month ", "4."), stop_reason="end_turn"):
+    return NS(texts=list(texts), stop_reason=stop_reason, usage=NS(input_tokens=900, output_tokens=12))
+
+
+def test_anthropic_chat_streams_text_history_with_fallbacks(fake_anthropic):
+    fake_anthropic.result = anthropic_chat()
+    p = AnthropicProvider(api_key=KEY, model="claude-opus-5-5")
+    assert list(p.stream_chat("sys", TURNS)) == ["Month ", "4."]
+    call = fake_anthropic.calls[0]
+    assert call["model"] == "claude-opus-5-5" and call["system"] == "sys" and "thinking" not in call
+    assert call["messages"] == [{"role": t.role, "content": t.content} for t in TURNS]
+    assert call["output_config"] == {"effort": "medium"} and call["cache_control"] == {"type": "ephemeral"}
+    assert call["extra_body"] == {"fallbacks": "default"}
+    assert call["extra_headers"] == {"anthropic-beta": "server-side-fallback-2026-07-01"}
+    assert p.last_usage.output_tokens == 12 and p.last_truncated is False
+
+
+def test_anthropic_chat_refusal_and_truncation(fake_anthropic):
+    p = AnthropicProvider(api_key=KEY, model="claude-opus-5-5")
+    fake_anthropic.result = anthropic_chat(stop_reason="refusal")
+    with pytest.raises(ProviderError) as e:
+        list(p.stream_chat("sys", TURNS))
+    assert e.value.code == "refusal"
+    fake_anthropic.result = anthropic_chat(stop_reason="max_tokens")
+    assert "".join(p.stream_chat("sys", TURNS)) == "Month 4." and p.last_truncated is True
+
+
+def test_anthropic_chat_maps_errors(fake_anthropic):
+    fake_anthropic.error = anthropic.AuthenticationError(f"bad {KEY}", response=_resp(401), body=None)
+    with pytest.raises(ProviderError) as e:
+        list(AnthropicProvider(api_key=KEY, model="m").stream_chat("sys", TURNS))
+    assert e.value.code == "invalid_key" and KEY not in str(e.value)
+
+
+def openai_chat(texts=("Month ", "4."), status="completed", reason=None, refusal=False):
+    events = [NS(type="response.output_text.delta", delta=t) for t in texts]
+    if refusal:
+        events.append(NS(type="response.refusal.delta", delta="I can't"))
+    final = NS(status=status, usage=NS(input_tokens=800, output_tokens=10),
+               incomplete_details=NS(reason=reason) if reason else None)
+    events.append(NS(type=f"response.{status}", response=final))
+    return events
+
+
+def test_openai_chat_streams_text_history(fake_openai):
+    fake_openai.result = openai_chat()
+    p = OpenAIProvider(api_key=KEY, model="model-x")
+    assert list(p.stream_chat("sys", TURNS)) == ["Month ", "4."]
+    call = fake_openai.calls[0]
+    assert call["stream"] is True and call["store"] is False and call["instructions"] == "sys"
+    assert call["input"] == [{"role": t.role, "content": t.content} for t in TURNS]
+    assert p.last_usage.input_tokens == 800 and p.last_truncated is False
+
+
+@pytest.mark.parametrize("result,code", [
+    (openai_chat(status="incomplete", reason="max_output_tokens"), None),
+    (openai_chat(status="incomplete", reason="content_filter"), "refusal"),
+    (openai_chat(refusal=True), "refusal"),
+    (openai_chat(status="failed"), "provider_unavailable"),
+])
+def test_openai_chat_outcomes(fake_openai, result, code):
+    fake_openai.result = result
+    p = OpenAIProvider(api_key=KEY, model="m")
+    if code is None:
+        list(p.stream_chat("sys", TURNS))
+        assert p.last_truncated is True
+    else:
+        with pytest.raises(ProviderError) as e:
+            list(p.stream_chat("sys", TURNS))
+        assert e.value.code == code

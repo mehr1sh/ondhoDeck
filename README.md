@@ -37,10 +37,18 @@ cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm build
 ```
 
 **Anthropic / OpenAI keys (BYOK).** Each advisor can store their own key under Settings → AI providers. Keys
-are encrypted at rest (`CREDENTIALS_ENCRYPTION_KEYS`), never returned by the API or logged, and used only by
-the worker. Anthropic keys that are not scoped to a workspace also need the workspace ID (`wrkspc_...`).
+are encrypted at rest (`CREDENTIALS_ENCRYPTION_KEYS`), never returned by the API or logged, and decrypted only in
+memory by the worker (extraction) and the API (assistant replies). Anthropic keys that are not scoped to a workspace also need the workspace ID (`wrkspc_...`).
 Extraction uses the requester's active key, otherwise a server key, otherwise the rule-based extractor; every
 job records which (`extraction_method`, `provider`, `model`, `credential_source`), including failed attempts.
+
+**Assistant.** A chat box in the bottom-right corner of every page (minimised to an Assistant button), answered
+with the advisor's own active key; there is no server-key fallback. On a household's
+pages it answers about that household, elsewhere it is a general conversation. Household conversations are grounded in that
+household's approved terms (with document and page), extracted terms awaiting review (labelled as unused),
+holdings, scenarios and latest results, rebuilt for every message; the assistant cannot change data or run
+analyses. Conversations are saved, private to their author, and deleted with the account. Replies stream as
+server-sent events; a failed or cancelled reply saves nothing.
 
 **Extraction, review and simulation.**
 
