@@ -328,7 +328,7 @@ function ExportButton({ householdId, reportId }: { householdId: string; reportId
       } else if (exp.status === "failed") {
         toast.error(exp.error_message ?? "The export failed.");
       } else {
-        toast.success("Export still in progress", "It will appear on the household Exports page when ready.");
+        toast.success("Export still in progress", "It will appear on the household Reports tab when ready.");
       }
     } catch (e) {
       const d = describeError(e);
