@@ -189,8 +189,16 @@ def run_pipeline(job_id: uuid.UUID, *, settings: Settings | None = None, storage
         existing = {c.extraction_key: c for c in db.scalars(
             select(ExtractedConstraint).where(ExtractedConstraint.document_id == doc_id))}
         written = kept = 0
+        used: set[str] = set()
         for c in report.constraints:
-            key = _extraction_key(c, method)
+            # Distinct readings of one quote (e.g. two values) share a base key: number the later ones so both
+            # reach review instead of the unique (document, key) index failing the whole job.
+            base = key = _extraction_key(c, method)
+            n = 1
+            while key in used:
+                n += 1
+                key = f"{base}#{n}"
+            used.add(key)
             row = existing.get(key)
             if row is not None and row.review_status != "needs_review":
                 kept += 1  # never overwrite a reviewed constraint
