@@ -30,7 +30,7 @@ services:
     environment:
       GOTRUE_API_HOST: 0.0.0.0
       PORT: "9999"
-      API_EXTERNAL_URL: http://localhost:54321/auth/v1
+      API_EXTERNAL_URL: http://localhost:54331/auth/v1
       GOTRUE_DB_DRIVER: postgres
       GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:auth-local-only@postgres:5432/slipslopes_auth?sslmode=disable
       DB_NAMESPACE: auth
@@ -39,7 +39,7 @@ services:
       GOTRUE_JWT_SECRET: local-dev-jwt-secret-at-least-32-characters-long
       GOTRUE_JWT_EXP: "3600"
       GOTRUE_JWT_AUD: authenticated
-      GOTRUE_JWT_ISSUER: http://localhost:54321/auth/v1
+      GOTRUE_JWT_ISSUER: http://localhost:54331/auth/v1
       GOTRUE_JWT_DEFAULT_GROUP_NAME: authenticated
       GOTRUE_JWT_ADMIN_ROLES: service_role
       GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"

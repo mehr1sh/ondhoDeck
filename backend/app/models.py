@@ -2,8 +2,11 @@
 
 Ownership model: every financial record belongs to a household; access to a household is
 granted only through an explicit `household_members` row linking it to an authenticated
-profile (the Supabase Auth user id). Enumerations are stored as constrained strings so that
-adding a value is a plain migration.
+profile (the Supabase Auth user id). Households belong to a firm. Public fund offering
+documents and their terms belong to a firm's shared fund library (`funds`) instead of a
+household: documents, pages, jobs, constraints and revisions carry exactly one owner
+(`household_id` XOR `fund_id`). Library access is granted through `firm_members`.
+Enumerations are stored as constrained strings so that adding a value is a plain migration.
 """
 from __future__ import annotations
 
@@ -57,6 +60,20 @@ def household_fk() -> Mapped[uuid.UUID]:
                          index=True)
 
 
+def owner_household_fk() -> Mapped[Optional[uuid.UUID]]:
+    """Household owner of a row that may instead belong to a library fund."""
+    return mapped_column(UUID(as_uuid=True), ForeignKey("households.id", ondelete="CASCADE"), index=True)
+
+
+def owner_fund_fk() -> Mapped[Optional[uuid.UUID]]:
+    """Library fund owner. RESTRICT: funds are archived, never deleted, so run history stays resolvable."""
+    return mapped_column(UUID(as_uuid=True), ForeignKey("funds.id", ondelete="RESTRICT"), index=True)
+
+
+def _one_owner(table: str) -> CheckConstraint:
+    return CheckConstraint("num_nonnulls(household_id, fund_id) = 1", name=f"ck_{table}_one_owner")
+
+
 # ----------------------------------------------------------------------------- identities
 
 class Profile(TimestampMixin, Base):
@@ -65,6 +82,97 @@ class Profile(TimestampMixin, Base):
     email: Mapped[Optional[str]] = mapped_column(String(320))
     display_name: Mapped[Optional[str]] = mapped_column(String(120))
     reporting_currency: Mapped[str] = mapped_column(String(3), default="USD", server_default="USD")
+
+
+FIRM_ROLES = ("admin", "reviewer", "advisor")
+
+
+class Firm(TimestampMixin, Base):
+    """Access boundary for the shared fund library. Every profile has at least one firm."""
+    __tablename__ = "firms"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True),
+                                                            ForeignKey("profiles.id", ondelete="SET NULL"))
+
+
+class FirmMember(Base):
+    """admin: manage members and library; reviewer: approve/supersede library terms; advisor: read, add funds
+    and documents, link holdings."""
+    __tablename__ = "firm_members"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    firm_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("firms.id", ondelete="CASCADE"),
+                                               nullable=False, index=True)
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"),
+                                               nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (UniqueConstraint("firm_id", "user_id", name="uq_firm_members_firm_user"),
+                      _enum_check("role", FIRM_ROLES, "ck_firm_members_role"))
+
+
+FUND_TYPES = ("non_traded_reit", "interval_fund", "private_fund", "other")
+FUND_METADATA_STATUSES = ("needs_review", "verified")
+FUND_STATUSES = ("active", "archived")
+
+
+class Fund(TimestampMixin, Base):
+    """Canonical record of a publicly offered fund in a firm's library. Holdings reference it via assets.fund_id."""
+    __tablename__ = "funds"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    firm_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("firms.id", ondelete="RESTRICT"),
+                                               nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    fund_type: Mapped[str] = mapped_column(String(24), nullable=False)
+    issuer: Mapped[Optional[str]] = mapped_column(String(200))
+    ticker: Mapped[Optional[str]] = mapped_column(String(16))
+    share_class: Mapped[Optional[str]] = mapped_column(String(40))
+    sec_cik: Mapped[Optional[str]] = mapped_column(String(10))
+    aliases: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text)
+    metadata_status: Mapped[str] = mapped_column(String(16), default="needs_review", server_default="needs_review",
+                                                 nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="active", server_default="active", nullable=False)
+    created_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True),
+                                                            ForeignKey("profiles.id", ondelete="SET NULL"))
+    __table_args__ = (
+        _enum_check("fund_type", FUND_TYPES, "ck_funds_type"),
+        _enum_check("metadata_status", FUND_METADATA_STATUSES, "ck_funds_metadata_status"),
+        _enum_check("status", FUND_STATUSES, "ck_funds_status"),
+        CheckConstraint("sec_cik IS NULL OR sec_cik ~ '^[0-9]{1,10}$'", name="ck_funds_cik"),
+        Index("uq_funds_firm_name_class", "firm_id", text("lower(name)"), text("coalesce(share_class, '')"),
+              unique=True),
+    )
+
+
+CREDENTIAL_PROVIDERS = ("anthropic", "openai")
+CREDENTIAL_STATUSES = ("untested", "valid", "invalid", "quota_exceeded", "error")
+
+
+class ProviderCredential(TimestampMixin, Base):
+    """A user's own LLM provider API key (BYOK). Only ciphertext is stored; it is never returned by the API."""
+    __tablename__ = "provider_credentials"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"),
+                                               nullable=False, index=True)
+    provider: Mapped[str] = mapped_column(String(16), nullable=False)
+    ciphertext: Mapped[str] = mapped_column(Text, nullable=False)
+    key_hint: Mapped[str] = mapped_column(String(8), nullable=False)
+    model: Mapped[Optional[str]] = mapped_column(String(120))
+    # Anthropic keys not scoped to a workspace must send this ID in the anthropic-workspace-id header.
+    # An identifier, not a secret.
+    workspace_id: Mapped[Optional[str]] = mapped_column(String(64))
+    is_active: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    status: Mapped[str] = mapped_column(String(16), default="untested", server_default="untested", nullable=False)
+    last_tested_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    last_error_code: Mapped[Optional[str]] = mapped_column(String(40))
+    last_error: Mapped[Optional[str]] = mapped_column(String(300))
+    __table_args__ = (
+        UniqueConstraint("user_id", "provider", name="uq_provider_credentials_user_provider"),
+        Index("uq_provider_credentials_one_active", "user_id", unique=True, postgresql_where=text("is_active")),
+        _enum_check("provider", CREDENTIAL_PROVIDERS, "ck_provider_credentials_provider"),
+        _enum_check("status", CREDENTIAL_STATUSES, "ck_provider_credentials_status"),
+    )
 
 
 ROLES = ("owner", "editor", "viewer")
@@ -79,6 +187,8 @@ class Household(TimestampMixin, Base):
     notes: Mapped[Optional[str]] = mapped_column(Text)
     is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=False)
+    firm_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("firms.id", ondelete="RESTRICT"),
+                                               nullable=False, index=True)
     members: Mapped[list[HouseholdMember]] = relationship(back_populates="household", cascade="all, delete-orphan")
     __table_args__ = (CheckConstraint("start_calendar_month BETWEEN 1 AND 12", name="ck_households_start_month"),
                       CheckConstraint("reporting_currency ~ '^[A-Z]{3}$'", name="ck_households_currency"))
@@ -115,6 +225,15 @@ class Asset(TimestampMixin, Base):
     pledged_to_sbl: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
     unfunded_commitment: Mapped[Optional[Decimal]] = mapped_column(MONEY)
     liquidity_notes: Mapped[Optional[str]] = mapped_column(Text)
+    # Holding of a shared library fund (same firm as the household); its approved terms apply to this asset.
+    fund_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("funds.id", ondelete="RESTRICT"), index=True)
+    fund: Mapped[Optional[Fund]] = relationship(lazy="select")
+
+    @property
+    def fund_name(self) -> Optional[str]:
+        return self.fund.name if self.fund is not None else None
+
     __table_args__ = (_enum_check("kind", ASSET_KINDS, "ck_assets_kind"),
                       CheckConstraint("amount >= 0", name="ck_assets_amount"),
                       CheckConstraint("currency ~ '^[A-Z]{3}$'", name="ck_assets_currency"))
@@ -179,14 +298,23 @@ class ScheduledEvent(TimestampMixin, Base):
 
 # ----------------------------------------------------------------------------- documents
 
-DOC_CATEGORIES = ("prospectus", "interval_fund", "private_fund_agreement", "sbl_agreement", "rsu_grant", "other")
+DOC_CATEGORIES = ("prospectus", "prospectus_supplement", "statement_of_additional_information", "interval_fund",
+                  "private_fund_agreement", "sbl_agreement", "rsu_grant", "other")
+# Public offering documents that may live in the shared fund library.
+FUND_DOC_CATEGORIES = ("prospectus", "prospectus_supplement", "statement_of_additional_information", "interval_fund",
+                       "other")
 DOC_STATUSES = ("pending_upload", "uploaded", "queued", "processing", "extracted", "failed", "deleted")
 
 
 class Document(TimestampMixin, Base):
     __tablename__ = "documents"
     id: Mapped[uuid.UUID] = uuid_pk()
-    household_id: Mapped[uuid.UUID] = household_fk()
+    household_id: Mapped[Optional[uuid.UUID]] = owner_household_fk()
+    fund_id: Mapped[Optional[uuid.UUID]] = owner_fund_fk()
+    # Library documents: date the document (or supplement) takes effect, and the document it replaces.
+    effective_date: Mapped[Optional[date]] = mapped_column(Date)
+    supersedes_document_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"))
     uploaded_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=False)
     category: Mapped[str] = mapped_column(String(32), nullable=False)
     original_filename: Mapped[str] = mapped_column(String(255), nullable=False)
@@ -210,6 +338,10 @@ class Document(TimestampMixin, Base):
         # The same file may be uploaded once per household (re-uploads return the existing record).
         Index("uq_documents_household_sha256_live", "household_id", "sha256", unique=True,
               postgresql_where=text("deleted_at IS NULL AND sha256 IS NOT NULL")),
+        # ...and once per library fund (deduplication of public offering documents).
+        Index("uq_documents_fund_sha256_live", "fund_id", "sha256", unique=True,
+              postgresql_where=text("deleted_at IS NULL AND sha256 IS NOT NULL AND fund_id IS NOT NULL")),
+        _one_owner("documents"),
     )
 
 
@@ -218,13 +350,15 @@ class DocumentPage(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"),
                                                    nullable=False)
-    household_id: Mapped[uuid.UUID] = household_fk()
+    household_id: Mapped[Optional[uuid.UUID]] = owner_household_fk()
+    fund_id: Mapped[Optional[uuid.UUID]] = owner_fund_fk()
     pdf_page: Mapped[int] = mapped_column(Integer, nullable=False)
     printed_page: Mapped[Optional[str]] = mapped_column(String(16))
     section: Mapped[Optional[str]] = mapped_column(String(120))
     text: Mapped[str] = mapped_column(Text, nullable=False)
     ocr: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
-    __table_args__ = (UniqueConstraint("document_id", "pdf_page", name="uq_document_pages_doc_page"),)
+    __table_args__ = (UniqueConstraint("document_id", "pdf_page", name="uq_document_pages_doc_page"),
+                      _one_owner("document_pages"))
 
 
 JOB_STATUSES = ("queued", "running", "succeeded", "failed")
@@ -235,7 +369,8 @@ class ProcessingJob(TimestampMixin, Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"),
                                                    nullable=False, index=True)
-    household_id: Mapped[uuid.UUID] = household_fk()
+    household_id: Mapped[Optional[uuid.UUID]] = owner_household_fk()
+    fund_id: Mapped[Optional[uuid.UUID]] = owner_fund_fk()
     kind: Mapped[str] = mapped_column(String(32), default="extract_constraints", nullable=False)
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="queued")
     attempt: Mapped[int] = mapped_column(Integer, default=1, nullable=False)
@@ -247,6 +382,9 @@ class ProcessingJob(TimestampMixin, Base):
     extraction_method: Mapped[Optional[str]] = mapped_column(String(20))
     provider: Mapped[Optional[str]] = mapped_column(String(40))
     model: Mapped[Optional[str]] = mapped_column(String(80))
+    requested_by: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL"))
+    credential_source: Mapped[Optional[str]] = mapped_column(String(16))  # user_byok | server | none
     started_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     finished_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
     error_code: Mapped[Optional[str]] = mapped_column(String(64))
@@ -258,6 +396,7 @@ class ProcessingJob(TimestampMixin, Base):
         # At most one active (queued/running) job per document.
         Index("uq_processing_jobs_active_per_document", "document_id", unique=True,
               postgresql_where=text("status IN ('queued', 'running')")),
+        _one_owner("processing_jobs"),
     )
 
 
@@ -268,7 +407,8 @@ SOURCE_TYPES = ("source_backed", "synthetic_document", "user_confirmed", "scenar
 class ExtractedConstraint(TimestampMixin, Base):
     __tablename__ = "extracted_constraints"
     id: Mapped[uuid.UUID] = uuid_pk()
-    household_id: Mapped[uuid.UUID] = household_fk()
+    household_id: Mapped[Optional[uuid.UUID]] = owner_household_fk()
+    fund_id: Mapped[Optional[uuid.UUID]] = owner_fund_fk()
     document_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"),
                                                    nullable=False, index=True)
     job_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True),
@@ -292,6 +432,13 @@ class ExtractedConstraint(TimestampMixin, Base):
     quote_verified: Mapped[bool] = mapped_column(Boolean, nullable=False)
     corroborating_pages: Mapped[list[int]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
     interpretation: Mapped[str] = mapped_column(Text, nullable=False)
+    value_kind: Mapped[Optional[str]] = mapped_column(String(16))
+    exceptions: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
+    discretion: Mapped[Optional[str]] = mapped_column(Text)
+    effective_period: Mapped[Optional[str]] = mapped_column(String(160))
+    ambiguous: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    validation_issues: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, default=list, server_default="[]",
+                                                                    nullable=False)
     confidence: Mapped[str] = mapped_column(String(8), nullable=False)
     source_type: Mapped[str] = mapped_column(String(24), nullable=False)
     review_status: Mapped[str] = mapped_column(String(16), nullable=False, default="needs_review")
@@ -300,7 +447,15 @@ class ExtractedConstraint(TimestampMixin, Base):
     model: Mapped[Optional[str]] = mapped_column(String(80))
     reviewed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"))
     reviewed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
+    # Validity window (library terms). effective_to is exclusive; set when a later term supersedes this one.
+    effective_from: Mapped[Optional[date]] = mapped_column(Date)
+    effective_to: Mapped[Optional[date]] = mapped_column(Date)
+    superseded_by_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("extracted_constraints.id", ondelete="SET NULL"))
     __table_args__ = (
+        _one_owner("extracted_constraints"),
+        CheckConstraint("effective_to IS NULL OR effective_from IS NULL OR effective_to > effective_from",
+                        name="ck_extracted_constraints_window"),
         _enum_check("review_status", REVIEW_STATUSES, "ck_extracted_constraints_review"),
         _enum_check("source_type", SOURCE_TYPES, "ck_extracted_constraints_source"),
         _enum_check("confidence", ("high", "medium", "low"), "ck_extracted_constraints_confidence"),
@@ -315,14 +470,16 @@ class ConstraintRevision(Base):
     id: Mapped[uuid.UUID] = uuid_pk()
     constraint_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("extracted_constraints.id", ondelete="CASCADE"), nullable=False)
-    household_id: Mapped[uuid.UUID] = household_fk()
+    household_id: Mapped[Optional[uuid.UUID]] = owner_household_fk()
+    fund_id: Mapped[Optional[uuid.UUID]] = owner_fund_fk()
     revision: Mapped[int] = mapped_column(Integer, nullable=False)
     changed_by: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"))
     change: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)  # {"field": {"from": x, "to": y}}
     snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)  # full state after the change
     note: Mapped[Optional[str]] = mapped_column(String(500))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    __table_args__ = (UniqueConstraint("constraint_id", "revision", name="uq_constraint_revisions_rev"),)
+    __table_args__ = (UniqueConstraint("constraint_id", "revision", name="uq_constraint_revisions_rev"),
+                      _one_owner("constraint_revisions"))
 
 
 # ----------------------------------------------------------------------------- analysis
@@ -356,6 +513,7 @@ class SimulationRun(Base):
     aware_summary: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     liquidity: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
     warnings: Mapped[list[str]] = mapped_column(JSONB, default=list, server_default="[]", nullable=False)
+    explanation: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
     idempotency_key: Mapped[Optional[str]] = mapped_column(String(128))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     months: Mapped[list[SimulationMonth]] = relationship(cascade="all, delete-orphan",
@@ -411,6 +569,26 @@ class StressResult(Base):
     binding_constraints: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     attribution: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
     key_events: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+
+
+class BlindSpotReport(Base):
+    """Persisted result of the deterministic blind-spot battery for one scenario (see services/blind_spots)."""
+    __tablename__ = "blind_spot_reports"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    household_id: Mapped[uuid.UUID] = household_fk()
+    scenario_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("scenarios.id", ondelete="CASCADE"),
+                                                   nullable=False, index=True)
+    created_by: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id"), nullable=False)
+    engine_version: Mapped[str] = mapped_column(String(16), nullable=False)
+    as_of_date: Mapped[date] = mapped_column(Date, nullable=False)
+    inputs_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    terms_snapshot: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    constraint_versions: Mapped[list[dict[str, Any]]] = mapped_column(JSONB, nullable=False)
+    warnings: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    result: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)  # method, risks, comparison, summary
+    risk_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    blind_spot_count: Mapped[int] = mapped_column(Integer, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
 
 
@@ -472,7 +650,8 @@ class PreventionRecommendation(Base):
                       UniqueConstraint("plan_id", "kind", "rank", name="uq_prevention_recommendations_rank"))
 
 
-EXPORT_KINDS = ("constraints_csv", "constraints_json", "simulation_csv", "results_json", "report_pdf")
+EXPORT_KINDS = ("constraints_csv", "constraints_json", "simulation_csv", "results_json", "report_pdf",
+                "blind_spot_pdf")
 EXPORT_STATUSES = ("queued", "running", "ready", "failed")
 
 
@@ -482,6 +661,8 @@ class ExportRecord(Base):
     household_id: Mapped[uuid.UUID] = household_fk()
     run_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True),
                                                         ForeignKey("simulation_runs.id", ondelete="CASCADE"))
+    blind_spot_report_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("blind_spot_reports.id", ondelete="CASCADE"))
     kind: Mapped[str] = mapped_column(String(24), nullable=False)
     status: Mapped[str] = mapped_column(String(12), nullable=False, default="queued")
     storage_path: Mapped[Optional[str]] = mapped_column(String(512))
@@ -503,9 +684,14 @@ class AuditEvent(Base):
         UUID(as_uuid=True), ForeignKey("households.id", ondelete="SET NULL"))
     actor_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id",
                                                                                           ondelete="SET NULL"))
+    firm_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("firms.id",
+                                                                                         ondelete="SET NULL"))
+    fund_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True), ForeignKey("funds.id",
+                                                                                         ondelete="SET NULL"))
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     entity_type: Mapped[str] = mapped_column(String(48), nullable=False)
     entity_id: Mapped[Optional[uuid.UUID]] = mapped_column(UUID(as_uuid=True))
     details: Mapped[dict[str, Any]] = mapped_column(JSONB, default=dict, server_default="{}", nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
-    __table_args__ = (Index("ix_audit_events_household_created", "household_id", "created_at"),)
+    __table_args__ = (Index("ix_audit_events_household_created", "household_id", "created_at"),
+                      Index("ix_audit_events_fund_created", "fund_id", "created_at"))

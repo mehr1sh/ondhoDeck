@@ -1,6 +1,6 @@
 """End-to-end acceptance run against a *running* local stack (not part of the unit test suite).
 
-Requires: API on :8000, Celery worker, Redis, Supabase Auth (GoTrue) behind the dev gateway on :54321,
+Requires: API on :8000, Celery worker, Redis, Supabase Auth (GoTrue) behind the dev gateway on :54331,
 Mailpit on :8025 (see docs/LOCAL_DEVELOPMENT.md). Exercises real auth emails, real storage writes,
 real queue processing and real database persistence. It does not exercise a live LLM provider.
 
@@ -18,7 +18,7 @@ from pathlib import Path
 import httpx
 
 API = "http://localhost:8000/api/v1"
-AUTH = "http://localhost:54321/auth/v1"
+AUTH = "http://localhost:54331/auth/v1"
 MAILPIT = "http://localhost:8025/api/v1"
 ANON_KEY = Path(sys.argv[2]).read_text().strip() if len(sys.argv) > 2 else ""
 FIXTURES = Path(__file__).resolve().parents[1] / "app" / "engine" / "fixtures"
@@ -140,6 +140,17 @@ def main() -> None:
     sbl = upload(a, hid, (FIXTURES / "SYNTHETIC_Securities_Backed_Line_Agreement.pdf").read_bytes(),
                  "SYNTHETIC_Securities_Backed_Line_Agreement.pdf", "sbl_agreement")
     check("SBL agreement extracted", sbl["status"] == "extracted", f"constraints={sbl['constraint_count']}")
+    job = a.get(f"/documents/{sbl['id']}/jobs").json()[0]
+    check("job records extraction method (no key configured -> rule-based)",
+          job["credential_source"] == "none" and job["extraction_method"] == "rule_based",
+          f"{job['credential_source']}/{job['extraction_method']}")
+    # BYOK settings: status and validation only (no request is sent to any provider).
+    prov = a.get("/me/ai-providers").json()
+    check("AI provider settings: encrypted storage available, no keys stored",
+          prov["storage_available"] and prov["credentials"] == [] and prov["active_provider"] is None)
+    bad = a.put("/me/ai-providers/openai", json={"api_key": "short", "model": "m"})
+    check("malformed API key rejected before storage", bad.status_code == 422 and "short" not in bad.text,
+          str(bad.status_code))
     cons = a.get(f"/households/{hid}/constraints").json()
     caps = {c["constraint_type"]: c for c in cons if c["asset_key"] == "non_traded_reit"}
     if prospectus:
@@ -168,9 +179,73 @@ def main() -> None:
     check("simulation persisted with both models", len(run["months"]) == 48,
           f"aware first shortfall M{run['aware_summary']['first_shortfall_month']} "
           f"{run['aware_summary']['shortfall_amount']}; naive {run['naive_summary']['first_shortfall_month']}")
+    exp_ = run["explanation"]
+    if exp_["first_shortfall_month"]:
+        top = exp_["contributing_rules"][0]
+        check("explanation links shortfall to rules and evidence",
+              bool(exp_["contributing_rules"]) and any(r["evidence"] for r in exp_["contributing_rules"]),
+              f"top rule '{top['rule']}' -{top['peak_shortfall_reduction']} ({top['basis']}); "
+              f"{sum(m['material'] for m in exp_['material_assumptions'])} material assumptions")
+    else:
+        check("explanation present (no shortfall)", exp_ is not None)
+    presets = {p["id"]: p for p in a.get("/scenario-presets").json()}
+    sus = presets["reit_suspended"]
+    s2 = a.post(f"/households/{hid}/scenarios", json={"name": sus["name"], "assumptions": sus["assumptions"]}).json()
+    run2 = a.post(f"/scenarios/{s2['id']}/runs").json()
+    check("REIT-suspended preset runs", run2["aware_summary"] is not None,
+          f"first shortfall M{run2['aware_summary']['first_shortfall_month']}")
     if prospectus:
         check("REIT caps source-backed from the uploaded prospectus", terms["reit_monthly_cap_pct"]["source_backed"],
               terms["reit_monthly_cap_pct"]["provenance"])
+    # 12a. shared fund library: one canonical fund record, reviewer approval, holding link, simulation use
+    if prospectus:
+        fund = a.post("/funds", json={"name": f"Blackstone Real Estate Income Trust (e2e {stamp})",
+                                      "fund_type": "non_traded_reit"}).json()
+        data = prospectus.read_bytes()
+        init = a.post(f"/funds/{fund['id']}/documents", json={
+            "filename": prospectus.name, "category": "prospectus", "size_bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest(), "effective_date": "2026-04-17"}).json()
+        lib_id = init["document"]["id"]
+        a.put(f"/documents/{lib_id}/content", content=data, headers={"Content-Type": "application/pdf"})
+        a.post(f"/documents/{lib_id}/complete")
+        lib_doc = wait_document(a, lib_id)
+        check("library document extracted (stored once for the fund)",
+              lib_doc["status"] == "extracted" and lib_doc["fund_id"] == fund["id"],
+              f"{lib_doc['constraint_count']} terms")
+        dup = a.post(f"/funds/{fund['id']}/documents", json={
+            "filename": "copy.pdf", "category": "prospectus", "size_bytes": len(data),
+            "sha256": hashlib.sha256(data).hexdigest()}).json()
+        check("identical library upload is deduplicated", dup["duplicate"] and dup["document"]["id"] == lib_id)
+        lib_terms = a.get(f"/funds/{fund['id']}/terms").json()["terms"]
+        for t in lib_terms:
+            a.post(f"/constraints/{t['id']}/approve", json={"expected_revision": t["revision"]})
+        cap = next(t for t in a.get(f"/funds/{fund['id']}/terms", params={"as_of": "2026-10-16"}).json()["terms"]
+                   if t["constraint_type"] == "redemption_monthly_cap")
+        check("library terms approved with effective date from the document",
+              cap["review_status"] == "confirmed" and cap["effective_from"] == "2026-04-17",
+              f"PDF p.{cap['pdf_page']}")
+        reit = next(x for x in a.get(f"/households/{hid}/assets").json() if x["kind"] == "non_traded_reit")
+        linked = a.patch(f"/assets/{reit['id']}", json={"fund_id": fund["id"]})
+        check("household holding linked to the library fund", linked.status_code == 200
+              and linked.json()["fund_name"] == fund["name"])
+        lib_run = a.post(f"/scenarios/{scen['id']}/runs").json()
+        owners = {v["owner"] for v in lib_run["constraint_versions"]}
+        check("simulation uses approved library terms (agreeing with the household copy)",
+              owners == {"household", "fund"} and lib_run["aware_summary"] == run["aware_summary"],
+              f"{sum(v['owner'] == 'fund' for v in lib_run['constraint_versions'])} library term versions recorded")
+        bs = a.post(f"/scenarios/{scen['id']}/blind-spots").json()
+        top = bs["result"]["risks"][0] if bs["result"]["risks"] else None
+        check("blind-spot check ranks risks", bs["risk_count"] == len(bs["result"]["risks"]),
+              f"{bs['risk_count']} risks, {bs['blind_spot_count']} blind spots; top: "
+              + (f"{top['label']} ({top['severity']}, M{top['first_shortfall_month']})" if top else "none"))
+        bexp = a.post(f"/households/{hid}/exports", json={"kind": "blind_spot_pdf",
+                                                          "blind_spot_report_id": bs["id"]}).json()
+        for _ in range(60):
+            bexp = a.get(f"/exports/{bexp['id']}").json()
+            if bexp["status"] in ("ready", "failed"):
+                break
+            time.sleep(1)
+        check("blind-spot PDF report generated by worker", bexp["status"] == "ready", f"{bexp['size_bytes']} bytes")
     # 13-14. reverse stress + prevention
     st = a.post(f"/scenarios/{scen['id']}/stress", json={}).json()
     check("reverse stress", "found" in st, f"boundary={st['boundary_drawdown']} month={st['first_shortfall_month']}")
@@ -193,10 +268,14 @@ def main() -> None:
     r = httpx.post(f"{AUTH}/logout", headers={**auth_headers(), "Authorization": a.headers["Authorization"]})
     check("logout", r.status_code == 204, str(r.status_code))
     a = Api(login(a_email, pw))
-    check("records persist across sessions", a.get(f"/households/{hid}/runs").json()["total"] == 1)
+    check("records persist across sessions",
+          a.get(f"/households/{hid}/runs").json()["total"] == (3 if prospectus else 2))
 
     # 17. another account cannot access
     b = Api(signup_and_login(b_email, pw))
+    if prospectus:
+        check("other firm cannot see the library fund", b.get(f"/funds/{fund['id']}").status_code == 404
+              and b.get("/funds").json()["total"] == 0)
     for url in (f"/households/{hid}", f"/documents/{sbl['id']}", f"/documents/{sbl['id']}/download",
                 f"/runs/{run['id']}", f"/exports/{exp['id']}/download"):
         check(f"other account denied {url}", b.get(url).status_code == 404)

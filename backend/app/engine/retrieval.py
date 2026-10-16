@@ -24,6 +24,14 @@ SEARCH_TERMS: dict[str, float] = {
     "unfunded commitment": 3, "business days": 1, "withholding": 3,
     "supplemental wage": 4, "trading window": 5, "blackout": 3, "liquidity": 1,
     "settlement": 1,
+    # suspension, demand and termination language
+    "suspend or postpone": 4, "postpone": 2, "on demand": 4, "demand full or partial": 4,
+    "sole discretion": 2, "terminate and cancel": 4,
+    # private funds
+    "capital contribution": 3, "capital commitment": 4, "defaulting partner": 4, "business days after": 2,
+    # equity awards
+    "vesting schedule": 5, "shall vest": 4, "vests": 2, "forfeit": 4, "termination of employment": 4,
+    "termination of service": 4,
 }
 
 _MIN_CHUNK = 200

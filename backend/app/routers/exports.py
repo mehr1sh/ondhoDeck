@@ -14,7 +14,7 @@ from ..authz import require_household, require_owned
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..errors import ApiError
-from ..models import ExportRecord, SimulationRun
+from ..models import BlindSpotReport, ExportRecord, SimulationRun
 from ..storage import get_storage
 from .common import Pagination, paginate
 
@@ -32,8 +32,14 @@ def request_export(household_id: uuid.UUID, body: ExportIn, user: CurrentUser = 
         run = db.get(SimulationRun, body.run_id)
         if run is None or run.household_id != household_id:
             raise ApiError(404, "not_found", "Simulation run not found.")
+    report_id = None
+    if body.kind == "blind_spot_pdf":
+        report = db.get(BlindSpotReport, body.blind_spot_report_id) if body.blind_spot_report_id else None
+        if report is None or report.household_id != household_id:
+            raise ApiError(404, "not_found", "Blind-spot report not found.")
+        report_id = report.id
     rec = ExportRecord(household_id=household_id, run_id=body.run_id if body.kind in RUN_REQUIRED else None,
-                       kind=body.kind, status="queued", created_by=user.id)
+                       blind_spot_report_id=report_id, kind=body.kind, status="queued", created_by=user.id)
     db.add(rec)
     db.flush()
     audit(db, actor_id=user.id, action="export.requested", entity_type="export", entity_id=rec.id,

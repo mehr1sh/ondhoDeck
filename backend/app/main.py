@@ -15,7 +15,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from .config import get_settings
 from .errors import install_error_handlers
 from .logging_config import configure_logging
-from .routers import analysis, constraints, documents, exports, financials, health, households
+from .routers import (
+    ai_providers,
+    analysis,
+    constraints,
+    documents,
+    exports,
+    financials,
+    firms,
+    funds,
+    health,
+    households,
+    workspace,
+)
 
 log = logging.getLogger("slipslopes.http")
 
@@ -24,7 +36,7 @@ def create_app() -> FastAPI:
     configure_logging()
     settings = get_settings()
     app = FastAPI(
-        title="SlipSlopes API", version=health.API_VERSION,
+        title="OndhoDeck API", version=health.API_VERSION,
         description="Contractual liquidity intelligence: document extraction, deterministic cash-flow "
                     "simulation, reverse stress testing and prevention planning.",
         docs_url="/docs", redoc_url=None, openapi_url="/openapi.json")
@@ -53,7 +65,7 @@ def create_app() -> FastAPI:
         return response
 
     for r in (health.router, households.router, financials.router, documents.router, constraints.router,
-              analysis.router, exports.router):
+              analysis.router, exports.router, ai_providers.router, firms.router, funds.router, workspace.router):
         app.include_router(r, prefix="/api/v1")
     return app
 

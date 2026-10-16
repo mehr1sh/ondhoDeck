@@ -26,10 +26,10 @@ from ..api_schemas import (
 )
 from ..audit import audit
 from ..auth import CurrentUser, get_current_user
-from ..authz import require_household, require_owned
+from ..authz import require_fund, require_household, require_owned
 from ..db import get_db
 from ..errors import ApiError
-from ..models import Asset, CashFlow, Liability, ScheduledEvent
+from ..models import Asset, CashFlow, Household, Liability, ScheduledEvent
 from .common import apply_updates
 
 router = APIRouter(tags=["financial profile"])
@@ -41,8 +41,30 @@ def _validate_event(data: dict[str, Any]) -> None:
         raise ApiError(422, "validation_error", "The RSU tax due month cannot be before the vest month.")
 
 
+# Library fund type -> the asset kind a holding of it must have.
+FUND_ASSET_KIND = {"non_traded_reit": "non_traded_reit", "interval_fund": "interval_fund",
+                   "private_fund": "private_fund_commitment", "other": "other"}
+
+
+def _check_fund_link(db: Session, user: CurrentUser, household_id: uuid.UUID, data: dict[str, Any]) -> None:
+    """A holding may reference a library fund of the household's firm, of a matching kind, that is active."""
+    fund_id = data.get("fund_id")
+    if fund_id is None:
+        return
+    fund = require_fund(db, user, fund_id)
+    household = db.get(Household, household_id)
+    if household is None or fund.firm_id != household.firm_id:
+        raise ApiError(422, "validation_error", "This fund belongs to another firm's library than the household.")
+    if fund.status != "active":
+        raise ApiError(422, "validation_error", "This fund is archived and cannot be linked.")
+    expected = FUND_ASSET_KIND[fund.fund_type]
+    if data.get("kind") != expected:
+        raise ApiError(422, "validation_error", f"A {fund.fund_type.replace('_', ' ')} fund can only be linked to a "
+                                                f"'{expected}' holding (this holding is '{data.get('kind')}').")
+
+
 def register(model: type, path: str, entity: str, In: type[BaseModel], Update: type[BaseModel],
-             Out: type[BaseModel], order_by: Any, validate=None) -> None:
+             Out: type[BaseModel], order_by: Any, validate=None, check=None) -> None:
     label = entity.replace("_", " ").capitalize()
 
     @router.get(f"/households/{{household_id}}/{path}", response_model=list[Out], name=f"list_{entity}s")
@@ -58,6 +80,8 @@ def register(model: type, path: str, entity: str, In: type[BaseModel], Update: t
         data = body.model_dump()
         if validate:
             validate(data)
+        if check:
+            check(db, user, household_id, data)
         obj = model(household_id=household_id, **data)
         db.add(obj)
         db.flush()
@@ -73,6 +97,9 @@ def register(model: type, path: str, entity: str, In: type[BaseModel], Update: t
         data = body.model_dump(exclude_unset=True)
         if validate:
             validate({**{k: getattr(obj, k) for k in ("kind", "month", "tax_due_month") if hasattr(obj, k)}, **data})
+        if check:
+            check(db, user, obj.household_id,
+                  {**{k: getattr(obj, k) for k in ("kind", "fund_id") if hasattr(obj, k)}, **data})
         changes = apply_updates(obj, data)
         if changes:
             audit(db, actor_id=user.id, action=f"{entity}.updated", entity_type=entity, entity_id=obj.id,
@@ -89,7 +116,7 @@ def register(model: type, path: str, entity: str, In: type[BaseModel], Update: t
         db.commit()
 
 
-register(Asset, "assets", "asset", AssetIn, AssetUpdate, AssetOut, (Asset.kind, Asset.name))
+register(Asset, "assets", "asset", AssetIn, AssetUpdate, AssetOut, (Asset.kind, Asset.name), check=_check_fund_link)
 register(Liability, "liabilities", "liability", LiabilityIn, LiabilityUpdate, LiabilityOut,
          (Liability.kind, Liability.name))
 register(CashFlow, "cash-flows", "cash_flow", CashFlowIn, CashFlowUpdate, CashFlowOut, (CashFlow.kind, CashFlow.name))

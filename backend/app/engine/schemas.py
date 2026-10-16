@@ -35,7 +35,23 @@ class ConstraintType(str, Enum):
     RSU_WITHHOLDING_RATE = "rsu_withholding_rate"
     RSU_MAX_WITHHOLDING_RATE = "rsu_max_withholding_rate"
     TRADING_WINDOW = "trading_window"
+    REDEMPTION_SUSPENSION = "redemption_suspension"
+    REDEMPTION_NOTICE_PERIOD = "redemption_notice_period"
+    CAPITAL_COMMITMENT = "capital_commitment"
+    DEMAND_REPAYMENT = "demand_repayment"
+    VESTING_SCHEDULE = "vesting_schedule"
+    TERMINATION_CONDITION = "termination_condition"
     OTHER = "other"
+
+
+class ValueKind(str, Enum):
+    """How a number in a clause should be read. A maximum is a cap the counterparty may fill less of -
+    never a guaranteed amount."""
+    MAXIMUM = "maximum"
+    MINIMUM = "minimum"
+    EXACT = "exact"
+    RANGE = "range"
+    QUALITATIVE = "qualitative"
 
 
 class SourceType(str, Enum):
@@ -99,6 +115,11 @@ class ContractConstraint(BaseModel):
     extraction_method: ExtractionMethod = ExtractionMethod.RULE_BASED
     corroborating_pages: list[int] = Field(default_factory=list)
     original_value: Optional[float] = None  # value as extracted, before any advisor edit
+    value_kind: Optional[ValueKind] = None
+    exceptions: list[str] = Field(default_factory=list)
+    discretion: Optional[str] = None
+    ambiguous: bool = False
+    validation_issues: list[dict] = Field(default_factory=list)  # [{code, severity, message}]
 
     @property
     def is_qualitative(self) -> bool:
@@ -132,6 +153,9 @@ class LLMExtractedTerm(BaseModel):
     unit: Optional[str]
     timing: Optional[str]
     conditions: Optional[str]
+    exceptions: list[str]
+    discretion: Optional[str]
+    value_kind: ValueKind
     evidence_quote: str
     interpretation: str
     confidence: Confidence
@@ -164,6 +188,9 @@ LLM_OUTPUT_JSON_SCHEMA: dict = {
                     "unit": _nullable("string"),
                     "timing": _nullable("string"),
                     "conditions": _nullable("string"),
+                    "exceptions": {"type": "array", "items": {"type": "string"}},
+                    "discretion": _nullable("string"),
+                    "value_kind": {"type": "string", "enum": [v.value for v in ValueKind]},
                     "evidence_quote": {"type": "string"},
                     "interpretation": {"type": "string"},
                     "confidence": {"type": "string", "enum": [c.value for c in Confidence]},
@@ -171,8 +198,8 @@ LLM_OUTPUT_JSON_SCHEMA: dict = {
                 },
                 "required": [
                     "excerpt_id", "constraint_type", "asset_key", "description", "value",
-                    "lower_bound", "upper_bound", "unit", "timing", "conditions",
-                    "evidence_quote", "interpretation", "confidence", "ambiguous",
+                    "lower_bound", "upper_bound", "unit", "timing", "conditions", "exceptions",
+                    "discretion", "value_kind", "evidence_quote", "interpretation", "confidence", "ambiguous",
                 ],
                 "additionalProperties": False,
             },

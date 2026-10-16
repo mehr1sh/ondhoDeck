@@ -25,16 +25,20 @@ RETENTION_POLICY = (
 
 
 def storage_path_for(doc: Document) -> str:
+    if doc.fund_id is not None:
+        return f"funds/{doc.fund_id}/documents/{doc.id}/{doc.safe_filename}"
     return f"{doc.household_id}/documents/{doc.id}/{doc.safe_filename}"
 
 
 def store_document(db: Session, storage: Storage, doc: Document, data: bytes, v: ValidatedPdf) -> None:
     """Write validated bytes to private storage and mark the document uploaded (caller commits)."""
-    duplicate = db.scalar(select(Document).where(Document.household_id == doc.household_id,
-                                                 Document.sha256 == v.sha256, Document.deleted_at.is_(None),
+    owner = (Document.fund_id == doc.fund_id) if doc.fund_id is not None else (
+        Document.household_id == doc.household_id)
+    duplicate = db.scalar(select(Document).where(owner, Document.sha256 == v.sha256, Document.deleted_at.is_(None),
                                                  Document.id != doc.id))
     if duplicate is not None:
-        raise ApiError(409, "conflict", "This household already has an identical document.",
+        raise ApiError(409, "conflict", "This fund already has an identical document." if doc.fund_id else
+                       "This household already has an identical document.",
                        details={"existing_document_id": str(duplicate.id)})
     path = storage_path_for(doc)
     try:
@@ -45,7 +49,8 @@ def store_document(db: Session, storage: Storage, doc: Document, data: bytes, v:
     doc.status = "uploaded"
 
 
-def create_job(db: Session, doc: Document, settings: Settings, idempotency_key: str) -> tuple[ProcessingJob, bool]:
+def create_job(db: Session, doc: Document, settings: Settings, idempotency_key: str,
+               requested_by: uuid.UUID | None = None) -> tuple[ProcessingJob, bool]:
     """Create a queued job (idempotent by key / one active job per document). Returns (job, created)."""
     existing = db.scalar(select(ProcessingJob).where(ProcessingJob.idempotency_key == idempotency_key))
     if existing is not None:
@@ -55,8 +60,10 @@ def create_job(db: Session, doc: Document, settings: Settings, idempotency_key: 
     if active is not None:
         return active, False
     previous = db.scalars(select(ProcessingJob).where(ProcessingJob.document_id == doc.id)).all()
-    job = ProcessingJob(document_id=doc.id, household_id=doc.household_id, status="queued",
+    job = ProcessingJob(document_id=doc.id, household_id=doc.household_id, fund_id=doc.fund_id,
+                        status="queued",
                         attempt=1, max_attempts=settings.max_job_attempts, idempotency_key=idempotency_key,
+                        requested_by=requested_by,
                         stats={"run_number": len(previous) + 1})
     db.add(job)
     doc.status, doc.error_code, doc.error_message = "queued", None, None

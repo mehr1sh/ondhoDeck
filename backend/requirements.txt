@@ -20,4 +20,5 @@ numpy==2.4.6
 pandas==3.0.6
 scipy==1.17.1
 anthropic==1.12.1
+openai==3.31.0
 python-dotenv==1.2.4

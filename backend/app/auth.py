@@ -25,6 +25,7 @@ from .config import Settings, get_settings
 from .db import get_db
 from .errors import ApiError
 from .models import Profile
+from .services.firms import create_personal_firm
 
 log = logging.getLogger("slipslopes.auth")
 ASYMMETRIC_ALGS = ("ES256", "RS256", "EdDSA")
@@ -94,6 +95,8 @@ def get_current_user(request: Request, db: Session = Depends(get_db),
     profile = db.scalar(select(Profile).where(Profile.id == user_id))
     if profile is None:
         db.add(Profile(id=user_id, email=email))
+        db.flush()
+        create_personal_firm(db, user_id)  # same transaction: a concurrent first request cannot add a second firm
         db.commit()
     elif email and profile.email != email:
         profile.email = email

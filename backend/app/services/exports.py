@@ -16,6 +16,7 @@ from sqlalchemy import select
 
 from ..db import session_scope
 from ..models import (
+    BlindSpotReport,
     Document,
     ExportRecord,
     ExtractedConstraint,
@@ -144,7 +145,7 @@ def report_pdf(bundle: dict[str, Any], household_name: str) -> bytes:
                     for t in bundle["contract_terms"])
     warns = "".join(f"<li>{e(w)}</li>" for w in run["warnings"]) or "<li>None</li>"
     doc_html = f"""
-    <h1>SlipSlopes liquidity report</h1>
+    <h1>OndhoDeck liquidity report</h1>
     <p><b>Household:</b> {e(household_name)} &nbsp; <b>Scenario:</b> {e(bundle['scenario']['name'])}<br/>
     <b>Run:</b> {e(run['id'])} &nbsp; <b>Engine:</b> {e(run['engine_version'])} &nbsp;
     <b>Generated:</b> {e(bundle['generated_at'][:19])} UTC</p>
@@ -164,8 +165,13 @@ def report_pdf(bundle: dict[str, Any], household_name: str) -> bytes:
     <h2>Contract terms used</h2>
     <table><tr><th>Term</th><th>Value</th><th>Provenance</th></tr>{terms}</table>
     <p><i>{e(DISCLAIMER)}</i></p>"""
+    return _render_pdf(doc_html)
+
+
+def _render_pdf(doc_html: str) -> bytes:
     css = ("* {font-family: sans-serif; font-size: 9pt;} h1 {font-size: 16pt;} h2 {font-size: 12pt;} "
-           "table {border-collapse: collapse;} td, th {border: 0.5px solid #999; padding: 2px 4px;}")
+           "h3 {font-size: 10pt;} table {border-collapse: collapse;} td, th {border: 0.5px solid #999; "
+           "padding: 2px 4px;} blockquote {margin: 2px 0 2px 12px; color: #333;}")
     out = io.BytesIO()
     writer = pymupdf.DocumentWriter(out)
     story = pymupdf.Story(html=doc_html, user_css=css)
@@ -179,6 +185,59 @@ def report_pdf(bundle: dict[str, Any], household_name: str) -> bytes:
         writer.end_page()
     writer.close()
     return out.getvalue()
+
+
+def blind_spot_pdf(report: BlindSpotReport, household_name: str, scenario_name: str, ccy: str) -> bytes:
+    """Advisor-ready report: ranked risks with contributing restrictions and clause evidence, and the scenario
+    comparison table. Every figure comes from the persisted deterministic result."""
+    e = html.escape
+    res = report.result
+    first = lambda m: f"Month {m}" if m else "None"  # noqa: E731
+    risks = []
+    for r in res["risks"]:
+        items = []
+        for c in r["contributing_rules"]:
+            effect = " and remove the shortfall" if c["removes_shortfall"] else ""
+            quotes = "".join(f"<blockquote>&ldquo;{e(ev['quote'][:400])}&rdquo; - {e(ev['document'])}, "
+                             f"PDF p.{ev['pdf_page']}</blockquote>" for ev in c["evidence"][:2])
+            items.append(f"<li>{e(c['rule'])}: removing it would reduce the peak deficit by "
+                         f"{_money(c['peak_shortfall_reduction'], ccy)}{effect} <i>({e(c['basis'])})</i>{quotes}</li>")
+        rules = "".join(items) or "<li>No single contract rule changes the outcome.</li>"
+        months = r.get("peak_in_months_of_spending")
+        months_txt = f" ({months} months of spending)" if months is not None else ""
+        flag = " - blind spot" if r["blind_spot"] else ""
+        binding = "; ".join(r["binding_in_first_shortfall_month"]) or "none"
+        risks.append(
+            f"<h3>{r['rank']}. {e(r['label'])} - {e(r['severity'])}{flag}</h3>"
+            f"<p>First shortfall: {first(r['first_shortfall_month'])} ({_money(r['shortfall_amount'], ccy)}); "
+            f"peak deficit {_money(r['peak_shortfall'], ccy)}{months_txt}. "
+            f"Paper-wealth view: {first(r['paper_wealth_first_shortfall_month'])}.</p>"
+            f"<p><b>Assumptions:</b> {e(' '.join(r['changes']))}</p>"
+            f"<p><b>Binding in the first shortfall month:</b> {e(binding)}</p><ul>{rules}</ul>")
+    comp = "".join(
+        f"<tr><td>{e(c['label'])}</td><td>{first(c['contract_aware']['first_shortfall_month'])}</td>"
+        f"<td>{_money(c['contract_aware']['peak_shortfall'], ccy)}</td>"
+        f"<td>{_money(c['contract_aware']['min_cash'], ccy)}</td>"
+        f"<td>{first(c['paper_wealth']['first_shortfall_month'])}</td></tr>" for c in res["comparison"])
+    warns = "".join(f"<li>{e(w)}</li>" for w in report.warnings) or "<li>None</li>"
+    method = e(res["method"]).replace("\n\n", "<br/><br/>")
+    return _render_pdf(f"""
+    <h1>Liquidity blind-spot report</h1>
+    <p><b>Household:</b> {e(household_name)} &nbsp; <b>Scenario:</b> {e(scenario_name)}<br/>
+    <b>Report:</b> {e(str(report.id))} &nbsp; <b>As of:</b> {report.as_of_date.isoformat()} &nbsp;
+    <b>Engine:</b> {e(report.engine_version)} &nbsp; <b>Generated:</b> {report.created_at:%Y-%m-%d %H:%M} UTC</p>
+    <p><i>{e(res['disclaimer'])}</i></p>
+    <h2>Summary</h2>
+    <p>{res['summary']['risks']} of {res['summary']['variants']} stress variants produce a shortfall;
+    {res['summary']['blind_spots']} are blind spots (not visible in a paper-wealth view);
+    {res['summary']['critical']} are critical. Monthly spending used for severity:
+    {_money(res['monthly_spending'], ccy)}.</p>
+    <h2>Ranked risks</h2>{''.join(risks) or '<p>No variant produced a shortfall.</p>'}
+    <h2>Scenario comparison</h2>
+    <table><tr><th>Variant</th><th>First shortfall</th><th>Peak deficit</th><th>Lowest month-end cash</th>
+    <th>Paper-wealth first shortfall</th></tr>{comp}</table>
+    <h2>Warnings</h2><ul>{warns}</ul>
+    <h2>Method</h2><p>{method}</p>""")
 
 
 def build_export(export_id: uuid.UUID) -> str:
@@ -203,6 +262,13 @@ def build_export(export_id: uuid.UUID) -> str:
             elif rec.kind == "constraints_json":
                 data = json.dumps(constraint_rows(db, rec.household_id), indent=2).encode()
                 name, ctype = "constraints.json", "application/json"
+            elif rec.kind == "blind_spot_pdf":
+                report = db.get(BlindSpotReport, rec.blind_spot_report_id) if rec.blind_spot_report_id else None
+                if report is None:
+                    raise ValueError("The blind-spot report no longer exists.")
+                scen = db.get(ScenarioDefinition, report.scenario_id)
+                data = blind_spot_pdf(report, household.name, scen.name if scen else "-", household.reporting_currency)
+                name, ctype = "blind-spot-report.pdf", "application/pdf"
             elif run is None:
                 raise ValueError("This export requires a simulation run.")
             elif rec.kind == "simulation_csv":
@@ -214,7 +280,7 @@ def build_export(export_id: uuid.UUID) -> str:
                 data, name, ctype = report_pdf(results_bundle(db, run), household.name), "report.pdf", "application/pdf"
             path = f"{rec.household_id}/exports/{rec.id}/{stamp}-{name}"
             get_storage().put(path, data, ctype)
-            rec.status, rec.storage_path, rec.filename = "ready", path, f"slipslopes-{stamp}-{name}"
+            rec.status, rec.storage_path, rec.filename = "ready", path, f"ondhodeck-{stamp}-{name}"
             rec.size_bytes, rec.completed_at, rec.error_message = len(data), datetime.now(UTC), None
         return "ready"
     except Exception as exc:

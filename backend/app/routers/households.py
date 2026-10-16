@@ -27,7 +27,7 @@ from ..api_schemas import (
 )
 from ..audit import audit
 from ..auth import CurrentUser, get_current_user
-from ..authz import require_household
+from ..authz import require_firm, require_household
 from ..config import Settings, get_settings
 from ..db import get_db
 from ..engine.synthetic_docs import SYNTHETIC_DOCS, ensure_synthetic_docs
@@ -38,6 +38,7 @@ from ..models import (
     CashFlow,
     Document,
     ExtractedConstraint,
+    FirmMember,
     Household,
     HouseholdMember,
     Liability,
@@ -46,6 +47,7 @@ from ..models import (
     ScheduledEvent,
     SimulationRun,
 )
+from ..services.firms import default_firm_id
 from ..storage import get_storage, safe_filename
 from .common import Pagination, apply_updates, paginate
 
@@ -119,6 +121,17 @@ def delete_account(body: AccountDelete, user: CurrentUser = Depends(get_current_
             deleted_households += 1
         else:
             db.delete(m)
+    for fm in db.scalars(select(FirmMember).where(FirmMember.user_id == user.id)).all():
+        if fm.role == "admin":
+            others = db.scalars(select(FirmMember).where(FirmMember.firm_id == fm.firm_id,
+                                                         FirmMember.user_id != user.id)
+                                .order_by(FirmMember.created_at)).all()
+            if others and not any(o.role == "admin" for o in others):
+                others[0].role = "admin"  # a firm is never left without an admin
+                audit(db, actor_id=None, action="firm.member_role_changed", entity_type="firm_member",
+                      entity_id=others[0].user_id, firm_id=fm.firm_id,
+                      details={"to": "admin", "reason": "last admin deleted their account"})
+        db.delete(fm)
     audit(db, actor_id=None, action="account.deleted", entity_type="profile", entity_id=None,
           details={"households_deleted": deleted_households})
     db.flush()
@@ -156,9 +169,13 @@ def list_households(p: Pagination = Depends(), user: CurrentUser = Depends(get_c
 
 
 def _create_household(db: Session, user: CurrentUser, body: HouseholdIn, is_demo: bool = False) -> Household:
+    if body.firm_id is not None:
+        firm_id = require_firm(db, user, body.firm_id).id
+    else:
+        firm_id = default_firm_id(db, user.id)
     h = Household(name=body.name, reporting_currency=body.reporting_currency,
                   start_calendar_month=body.start_calendar_month, notes=body.notes, created_by=user.id,
-                  is_demo=is_demo)
+                  is_demo=is_demo, firm_id=firm_id)
     db.add(h)
     db.flush()
     db.add(HouseholdMember(household_id=h.id, user_id=user.id, role="owner"))
@@ -212,7 +229,7 @@ def create_demo_household(user: CurrentUser = Depends(get_current_user), db: Ses
                        currency=usd, label="Interval fund tender"),
         ScenarioDefinition(household_id=h.id, name="Demo: 25% equity drawdown", created_by=user.id,
                            description="Synthetic stress scenario. Every value is an editable assumption.",
-                           assumptions=ScenarioAssumptions().model_dump()),
+                           assumptions=ScenarioAssumptions().model_dump(mode="json")),
     ])
     db.flush()
     storage = get_storage()
@@ -226,7 +243,7 @@ def create_demo_household(user: CurrentUser = Depends(get_current_user), db: Ses
         db.add(doc)
         db.flush()
         store_document(db, storage, doc, data, validate_pdf(data, settings))
-        job, _ = create_job(db, doc, settings, f"{doc.id}:demo")
+        job, _ = create_job(db, doc, settings, f"{doc.id}:demo", user.id)
         jobs.append(job.id)
     db.commit()
     for job_id in jobs:

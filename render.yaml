@@ -24,12 +24,18 @@ envVarGroups:
         value: documents
       - key: CORS_ORIGINS            # e.g. https://slipslopes.vercel.app
         sync: false
-      - key: LLM_PROVIDER            # none | anthropic
+      - key: LLM_PROVIDER            # none | anthropic | openai
         value: none
       - key: ANTHROPIC_API_KEY
         sync: false
       - key: LLM_MODEL
         value: claude-opus-5-5
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: OPENAI_MODEL            # required when LLM_PROVIDER=openai
+        sync: false
+      - key: CREDENTIALS_ENCRYPTION_KEYS   # Fernet key(s) for user API keys; same value on API and worker
+        sync: false
       - key: MAX_UPLOAD_MB
         value: "50"
       - key: OCR_ENABLED

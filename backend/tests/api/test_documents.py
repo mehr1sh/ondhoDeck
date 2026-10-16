@@ -166,13 +166,14 @@ def test_llm_provider_path_with_mock(alice, hid, monkeypatch, db):
             return {"terms": [
                 {"excerpt_id": "p1-c0", "constraint_type": "sbl_maintenance_threshold", "asset_key": "sbl",
                  "description": "Maintenance threshold", "value": 60, "lower_bound": None, "upper_bound": None,
-                 "unit": "% LTV", "timing": None, "conditions": None,
+                 "unit": "% LTV", "timing": None, "conditions": None, "exceptions": [], "discretion": None,
+                 "value_kind": "exact",
                  "evidence_quote": "If at any time the outstanding Loan Balance exceeds 60% of the market value of "
                                    "the Collateral", "interpretation": "LTV trigger", "confidence": "high",
                  "ambiguous": False},
                 {"excerpt_id": "p1-c0", "constraint_type": "sbl_advance_rate", "asset_key": "sbl",
                  "description": "Invented", "value": 80, "lower_bound": None, "upper_bound": None, "unit": "%",
-                 "timing": None, "conditions": None, "evidence_quote": "The lender guarantees 80% at all times.",
+                 "timing": None, "conditions": None, "exceptions": [], "discretion": None, "value_kind": "exact", "evidence_quote": "The lender guarantees 80% at all times.",
                  "interpretation": "not in the document", "confidence": "high", "ambiguous": False}]}
 
     monkeypatch.setattr("app.services.processing.get_provider", lambda settings: MockProvider())

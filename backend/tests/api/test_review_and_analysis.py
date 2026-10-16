@@ -204,3 +204,138 @@ def test_scenario_assumption_validation(alice):
     assert r.status_code == 422
     defaults = alice.get("/scenario-defaults").json()
     assert defaults["assumptions"]["equity_drawdown"] == 0.25 and len(defaults["fields"]) >= 20
+
+
+def test_run_explanation_links_rules_to_approved_evidence(alice, demo):
+    hid = demo["id"]
+    approve_all(alice, hid)
+    scen = alice.get(f"/households/{hid}/scenarios").json()[0]
+    run = alice.post(f"/scenarios/{scen['id']}/runs").json()
+    exp = run["explanation"]
+    assert exp["first_shortfall_month"] == 4 and exp["shortfall_amount"] == pytest.approx(71871.97, abs=0.01)
+    assert any("Capital call" in b for b in exp["binding_in_first_shortfall_month"])
+    rules = {r["relaxation"]: r for r in exp["contributing_rules"]}
+    sbl = rules["collateral_call"]
+    assert sbl["removes_shortfall"] is True and sbl["basis"] == "approved contract clauses"
+    assert sbl["evidence"] and all(e["document"].startswith("SYNTHETIC_Securities") and e["pdf_page"] >= 1
+                                   and e["quote"] for e in sbl["evidence"])
+    # No REIT prospectus approved in the demo: REIT gate is explicitly a default assumption.
+    assert rules["reit_gate"]["evidence"] == [] and "default" in rules["reit_gate"]["basis"]
+    material = {a["assumption"]: a for a in exp["material_assumptions"]}
+    assert material["equity_drawdown"]["material"] is True and len(material) >= 6
+    # Stored with the run and returned again later.
+    again = alice.get(f"/runs/{run['id']}").json()
+    assert again["explanation"] == exp
+
+
+def test_scenario_presets_are_labelled_assumptions(alice):
+    presets = alice.get("/scenario-presets").json()
+    ids = {p["id"] for p in presets}
+    assert {"drawdown_2022", "reit_board_halves", "reit_suspended"} <= ids
+    suspended = next(p for p in presets if p["id"] == "reit_suspended")
+    assert suspended["assumptions"]["reit_board_fill_factor"] == 0.0 and "assumption" in suspended["label"].lower()
+    hid = alice.post("/households", json={"name": "P"}).json()["id"]
+    created = alice.post(f"/households/{hid}/scenarios", json={"name": suspended["name"],
+                                                               "assumptions": suspended["assumptions"]})
+    assert created.status_code == 201
+
+
+def _clone_constraint(db, cid, value, status, key):
+    src = db.get(ExtractedConstraint, uuid.UUID(cid))
+    cols = {c.name: getattr(src, c.name) for c in ExtractedConstraint.__table__.columns
+            if c.name not in ("id", "created_at", "updated_at")}
+    clone = ExtractedConstraint(**{**cols, "extraction_key": key, "value": Decimal(value), "review_status": status,
+                                   "pdf_page": src.pdf_page})
+    db.add(clone)
+    db.commit()
+    return str(clone.id)
+
+
+def test_conflicting_approved_terms_block_analysis_until_resolved(alice, demo, db):
+    hid = demo["id"]
+    approve_all(alice, hid)
+    scen = alice.get(f"/households/{hid}/scenarios").json()[0]
+    baseline = alice.post(f"/scenarios/{scen['id']}/runs").json()["aware_summary"]
+    adv = next(c for c in alice.get(f"/households/{hid}/constraints").json()
+               if c["constraint_type"] == "sbl_advance_rate")
+
+    # An unreviewed clause with a different value changes nothing.
+    pending = _clone_constraint(db, adv["id"], "70", "needs_review", "test:pending")
+    r = alice.post(f"/scenarios/{scen['id']}/runs")
+    assert r.status_code == 201 and r.json()["aware_summary"] == baseline
+
+    # Two approved clauses that disagree: every analysis endpoint refuses, listing both clauses.
+    conflicting = _clone_constraint(db, adv["id"], "70", "confirmed", "test:conflict")
+    for path in ("runs", "stress", "prevention"):
+        r = alice.post(f"/scenarios/{scen['id']}/{path}", json={} if path != "runs" else None)
+        assert r.status_code == 409, (path, r.text)
+        err = r.json()["error"]
+        assert err["code"] == "term_conflict" and "reject" in err["message"].lower()
+        (conflict,) = err["details"]["conflicts"]
+        assert conflict["term"] == "sbl_advance_rate"
+        assert {x["constraint_id"] for x in conflict["candidates"]} == {adv["id"], conflicting}
+        assert sorted(x["value"] for x in conflict["candidates"]) == [50.0, 70.0]
+    assert alice.get(f"/households/{hid}/runs").json()["total"] == 2  # nothing persisted while blocked
+
+    # Resolving by rejecting the clause that does not apply restores the original result.
+    c = alice.get(f"/constraints/{conflicting}").json()
+    assert alice.post(f"/constraints/{conflicting}/reject", json={"expected_revision": c["revision"]}).status_code == 200
+    r = alice.post(f"/scenarios/{scen['id']}/runs")
+    assert r.status_code == 201 and r.json()["aware_summary"] == baseline
+    assert pending not in {v["id"] for v in r.json()["constraint_versions"]}
+
+
+def test_assumption_field_kinds_match_default_values(alice):
+    """The editor parses each field by its declared kind; a mismatch makes the defaults unsavable."""
+    d = alice.get("/scenario-defaults").json()
+    for f in d["fields"]:
+        v = d["assumptions"][f["key"]]
+        values = list(v.values()) if isinstance(v, dict) else [v]
+        if f["kind"] == "list":
+            assert all(isinstance(x, list) and all(isinstance(m, int) for m in x) for x in values), f["key"]
+        if f["kind"] == "percent" and not f["key"].endswith("_pct"):
+            assert all(0 <= x <= 1 for x in values), f["key"]
+
+
+def test_approval_rechecks_evidence_on_the_cited_page(alice, demo, db):
+    hid = demo["id"]
+    cons = alice.get(f"/households/{hid}/constraints").json()
+    adv = next(c for c in cons if c["constraint_type"] == "sbl_advance_rate")
+    row = db.get(ExtractedConstraint, uuid.UUID(adv["id"]))
+    row.evidence_quote = "This sentence appears on no page of the agreement."
+    db.commit()
+    r = alice.post(f"/constraints/{adv['id']}/approve", json={"expected_revision": adv["revision"]})
+    assert r.status_code == 422 and r.json()["error"]["code"] == "unsupported_evidence"
+    assert "not on the cited page" in r.json()["error"]["message"]
+    edit = alice.patch(f"/constraints/{adv['id']}", json={"expected_revision": adv["revision"], "value": "45"})
+    assert edit.status_code == 422  # an edit cannot attach a reviewer value to a citation that does not exist
+
+
+def test_unsupported_value_needs_reviewer_edit_before_it_can_be_used(alice, demo, db):
+    hid = demo["id"]
+    cons = alice.get(f"/households/{hid}/constraints").json()
+    adv = next(c for c in cons if c["constraint_type"] == "sbl_advance_rate")
+    row = db.get(ExtractedConstraint, uuid.UUID(adv["id"]))
+    row.value = Decimal("70")  # quote says 50%
+    row.validation_issues = [{"code": "value_not_in_quote", "severity": "error", "message": "value=70 not in quote"}]
+    db.commit()
+    r = alice.post(f"/constraints/{adv['id']}/approve", json={"expected_revision": adv["revision"]})
+    assert r.status_code == 422 and "value=70 not in quote" in r.json()["error"]["message"]
+    edit = alice.patch(f"/constraints/{adv['id']}", json={"expected_revision": adv["revision"], "value": "55",
+                                                          "note": "confirmed with lender"})
+    assert edit.status_code == 200 and edit.json()["review_status"] == "edited"
+    assert edit.json()["source_type"] == "user_confirmed"
+
+
+def test_run_explanation_evidence_links_and_unmodelled_terms(alice, demo):
+    hid = demo["id"]
+    approve_all(alice, hid)
+    scen = alice.get(f"/households/{hid}/scenarios").json()[0]
+    run = alice.post(f"/scenarios/{scen['id']}/runs").json()
+    exp = run["explanation"]
+    version_ids = {v["id"] for v in run["constraint_versions"]}
+    cited = [e for r in exp["contributing_rules"] for e in r["evidence"]]
+    assert cited and all(e["id"] in version_ids and e["role"] in ("applied", "derived") for e in cited)
+    assert {e["id"] for e in exp["not_modelled"]}.isdisjoint({e["id"] for e in cited})
+    assert all(e["value"] is None or "no simulator input" in e["reason"].lower() for e in exp["not_modelled"])
+    assert exp["excluded_unsupported"] == []

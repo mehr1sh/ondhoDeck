@@ -31,6 +31,9 @@ os.environ.update({
     "RATE_LIMIT_EXTRACTION_PER_HOUR": "1000",
     "RATE_LIMIT_COMPUTE_PER_MINUTE": "1000",
     "REDIS_URL": "redis://localhost:1/0",  # unreachable on purpose: rate limiter falls back to memory
+    # Throwaway Fernet key generated per test session (never a real secret).
+    "CREDENTIALS_ENCRYPTION_KEYS": __import__("cryptography.fernet", fromlist=["Fernet"]).Fernet.generate_key().decode(),
+    "RATE_LIMIT_PROVIDER_TESTS_PER_10MIN": "1000",
 })
 
 import jwt  # noqa: E402
@@ -59,6 +62,11 @@ def make_token(sub: uuid.UUID | str, email: str = "user@example.com", exp_in: in
 def migrated_db():
     cfg = Config(os.path.join(BACKEND, "alembic.ini"))
     cfg.set_main_option("script_location", os.path.join(BACKEND, "alembic"))
+    # Test database only: clear library rows left by a previous session so the migration's downgrade guard
+    # (which refuses to destroy library data) lets the schema be rebuilt from scratch.
+    with get_engine().begin() as conn:
+        if conn.execute(text("SELECT to_regclass('public.funds')")).scalar() is not None:
+            conn.execute(text("TRUNCATE funds, firm_members, firms CASCADE"))
     command.downgrade(cfg, "base")
     command.upgrade(cfg, "head")
     yield
@@ -66,10 +74,10 @@ def migrated_db():
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    tables = ["audit_events", "exports", "prevention_recommendations", "prevention_plans", "stress_results",
+    tables = ["provider_credentials", "audit_events", "exports", "prevention_recommendations", "prevention_plans", "stress_results",
               "simulation_months", "simulation_runs", "scenarios", "constraint_revisions", "extracted_constraints",
               "processing_jobs", "document_pages", "documents", "scheduled_events", "cash_flows", "liabilities",
-              "assets", "household_members", "households", "profiles"]
+              "blind_spot_reports", "assets", "household_members", "households", "funds", "firm_members", "firms", "profiles"]
     with get_engine().begin() as conn:
         conn.execute(text("TRUNCATE " + ", ".join(tables) + " CASCADE"))
     reset_local()

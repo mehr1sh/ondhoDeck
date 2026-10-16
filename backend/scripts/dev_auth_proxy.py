@@ -4,7 +4,7 @@ Hosted Supabase serves Auth at https://<project>.supabase.co/auth/v1; the supaba
 expects that layout. GoTrue itself serves routes at its root, so locally this tiny proxy adds the
 prefix and CORS headers for the frontend origin. Never deploy this.
 
-    python scripts/dev_auth_proxy.py   # listens on :54321, forwards to GOTRUE_URL (default :9999)
+    python scripts/dev_auth_proxy.py   # listens on :54331, forwards to GOTRUE_URL (default :9999)
 """
 from __future__ import annotations
 
@@ -44,7 +44,7 @@ async def proxy(request: Request) -> Response:
     out_headers = {k: v for k, v in upstream.headers.items() if k.lower() not in HOP | {"content-encoding"}}
     # Rewrite verification redirects so they keep pointing at this gateway.
     if "location" in out_headers:
-        out_headers["location"] = out_headers["location"].replace(GOTRUE, "http://localhost:54321/auth/v1")
+        out_headers["location"] = out_headers["location"].replace(GOTRUE, "http://localhost:54331/auth/v1")
     return _cors(request, Response(upstream.content, status_code=upstream.status_code, headers=out_headers))
 
 
@@ -57,4 +57,4 @@ app = Starlette(routes=[Route("/health", health),
                                                                          "OPTIONS"])])
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "54321")), log_level="warning")
+    uvicorn.run(app, host="127.0.0.1", port=int(os.environ.get("PORT", "54331")), log_level="warning")

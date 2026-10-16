@@ -42,13 +42,22 @@ class Settings(BaseSettings):
     processing_time_limit_s: int = Field(900, ge=30)
     max_job_attempts: int = Field(3, ge=1, le=10)
 
-    # LLM extraction (optional; rule-based extraction is used when no provider is configured)
-    llm_provider: Literal["anthropic", "none"] = "none"
+    # Server-level LLM extraction (optional). Users can also bring their own key (BYOK, stored encrypted).
+    # With no BYOK key and LLM_PROVIDER=none, deterministic rule-based extraction is used.
+    llm_provider: Literal["anthropic", "openai", "none"] = "none"
     anthropic_api_key: str = ""
-    llm_model: str = "claude-opus-5-5"
+    anthropic_workspace_id: str = ""  # only for Anthropic keys not scoped to a workspace
+    llm_model: str = "claude-opus-5-5"   # model for the server Anthropic provider
+    openai_api_key: str = ""
+    openai_model: str = ""               # required when LLM_PROVIDER=openai (no default is assumed)
     llm_effort: Literal["low", "medium", "high"] = "medium"
     llm_max_excerpts: int = Field(8, ge=1, le=30)
     llm_timeout_s: int = Field(180, ge=10)
+
+    # BYOK credential encryption: comma-separated Fernet keys (first encrypts; all decrypt, for rotation).
+    # When empty, storing user API keys is disabled - keys are never stored unencrypted.
+    credentials_encryption_keys: str = ""
+    rate_limit_provider_tests_per_10min: int = 10
 
     # HTTP
     cors_origins: str = "http://localhost:3000"
@@ -78,9 +87,18 @@ class Settings(BaseSettings):
     def jwt_issuer(self) -> str:
         return f"{self.supabase_url.rstrip('/')}/auth/v1" if self.supabase_url else ""
 
+    @field_validator("llm_model")
+    @classmethod
+    def _default_model_when_blank(cls, v: str) -> str:
+        return v.strip() or "claude-opus-5-5"
+
     @property
     def llm_configured(self) -> bool:
-        return self.llm_provider == "anthropic" and bool(self.anthropic_api_key)
+        if self.llm_provider == "anthropic":
+            return bool(self.anthropic_api_key)
+        if self.llm_provider == "openai":
+            return bool(self.openai_api_key and self.openai_model)
+        return False
 
     @model_validator(mode="after")
     def _production_guards(self) -> Settings:

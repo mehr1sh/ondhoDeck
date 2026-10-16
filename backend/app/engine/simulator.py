@@ -20,6 +20,7 @@ from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass, field
+from math import ceil
 from typing import Optional
 
 import pandas as pd
@@ -161,16 +162,24 @@ class ContractTerms:
     rsu_withholding_rate: float = 0.22
     rsu_max_withholding_rate: float = 0.37
     provenance: dict[str, str] = field(default_factory=dict)
+    # Constraint ids passed in but ignored because they were not approved (confirmed/edited).
+    excluded_unapproved: list[str] = field(default_factory=list)
+    # Approved constraints ignored because their evidence does not support them ({constraint_id, reasons}).
+    excluded_unsupported: list[dict] = field(default_factory=list)
+    # Which approved constraint ids set each field (the rules actually applied by the engine).
+    applied: dict[str, list[str]] = field(default_factory=dict)
+    # Fields whose value is a modelling interpretation of a clause rather than a number the clause states.
+    derived: list[str] = field(default_factory=list)
     # Counterfactual switches used for attribution ("what if this rule didn't exist?")
     relax: frozenset[str] = frozenset()
 
 
 RELAXATIONS = {
-    "reit_gate": "BREIT repurchase caps (2%/5%) and settlement lag",
+    "reit_gate": "Non-traded REIT repurchase caps and settlement lag",
     "interval_gate": "Interval fund offer windows and proration",
     "collateral_call": "SBL maintenance call",
     "trading_window": "RSU trading windows",
-    "withholding_gap": "RSU under-withholding (22% vs effective rate)",
+    "withholding_gap": "RSU under-withholding (statutory withholding vs effective tax rate)",
 }
 
 
@@ -189,27 +198,123 @@ _TERM_MAP: dict[tuple[ConstraintType, AssetKey], tuple[str, float]] = {
 }
 
 
+APPROVED_STATUSES = frozenset({ReviewStatus.CONFIRMED.value, ReviewStatus.EDITED.value})
+
+
+class TermConflictError(ValueError):
+    """Two or more approved constraints assign different values to the same simulator input.
+
+    `conflicts` lists, per input, every approved candidate (id, value, document, page) so the reviewer can
+    reject or edit all but one. No candidate is chosen automatically: constraints carry no effective dates
+    or document-version links (`effective_period` is descriptive text), so nothing can rank them.
+    """
+
+    def __init__(self, conflicts: list[dict]):
+        self.conflicts = conflicts
+        parts = [f"{c['term']}: " + ", ".join(f"{x['value']:g} ({x['document']} p.{x['pdf_page']})"
+                                              for x in c["candidates"]) for c in conflicts]
+        super().__init__("Approved contract terms conflict - " + "; ".join(parts))
+
+
+def _status(c: ContractConstraint) -> str:
+    s = c.review_status
+    return s.value if isinstance(s, ReviewStatus) else str(s)
+
+
+TERM_MAP_KEYS = frozenset(_TERM_MAP)
+
+
+def evidence_blockers(c: ContractConstraint) -> list[str]:
+    """Reasons an approved constraint's evidence does not support it. Reviewer-edited terms keep their reviewer
+    value (their extracted-value issues no longer apply) but still need a quote that is on the cited page."""
+    reasons = [] if c.quote_verified else ["quote_not_verified_on_cited_page"]
+    if _status(c) == ReviewStatus.CONFIRMED.value:
+        reasons += [i.get("code", "error") for i in (c.validation_issues or []) if i.get("severity") == "error"]
+    return reasons
+
+
+def settlement_lag_months(c: ContractConstraint) -> int:
+    """Month-end repurchase date + the stated settlement period -> months until cash, at least the next month."""
+    if c.value is None:
+        return 1
+    unit = (c.unit or "").lower()
+    if "month" in unit:
+        return max(1, ceil(float(c.value)))
+    per_month = 21 if "business" in unit else 30
+    return max(1, ceil(float(c.value) / per_month))
+
+
 def terms_from_constraints(constraints: Iterable[ContractConstraint]) -> ContractTerms:
-    """Build ContractTerms from non-rejected constraints; unmapped fields keep labelled defaults."""
+    """Build ContractTerms from APPROVED, evidence-supported constraints only; unmapped fields keep labelled defaults.
+
+    Fails closed: only `confirmed` and `edited` constraints affect results. Unreviewed, rejected or unknown
+    statuses are ignored (`excluded_unapproved`); approved constraints whose quote is not on the cited page, or
+    confirmed ones carrying an evidence error, are ignored too (`excluded_unsupported`). Approved constraints that
+    agree on a value corroborate each other; approved constraints that disagree raise TermConflictError.
+    `applied` records which constraint ids set each field; `derived` marks fields that are an interpretation.
+    """
     terms = ContractTerms()
     prov = {f: "default modelling assumption (no reviewed source clause)" for f in (
         "reit_monthly_cap_pct", "reit_quarterly_cap_pct", "reit_pro_rata", "reit_early_deduction_pct",
         "reit_settlement_lag_months", "interval_offer_pct", "interval_fee_pct", "sbl_advance_rate",
         "sbl_maintenance_ltv", "sbl_interest_rate", "rsu_withholding_rate", "rsu_max_withholding_rate")}
+    numeric: dict[str, list[tuple[float, ContractConstraint, str]]] = {}
+    qualitative: dict[str, list[tuple[ContractConstraint, str]]] = {}
     for c in constraints:
-        if c.review_status == ReviewStatus.REJECTED:
+        if _status(c) not in APPROVED_STATUSES:
+            terms.excluded_unapproved.append(c.constraint_id)
             continue
-        cite = f"{c.document_name} p.{c.pdf_page} ({c.review_status.value})"
+        blockers = evidence_blockers(c)
+        if blockers:
+            terms.excluded_unsupported.append({"constraint_id": c.constraint_id, "type": c.constraint_type.value,
+                                               "document": c.document_name, "pdf_page": c.pdf_page,
+                                               "reasons": blockers})
+            continue
+        cite = f"{c.document_name} p.{c.pdf_page} ({_status(c)})"
         key = (c.constraint_type, c.asset_key)
         if key in _TERM_MAP and c.value is not None:
             fname, mult = _TERM_MAP[key]
-            setattr(terms, fname, float(c.value) * mult)
-            prov[fname] = cite
+            numeric.setdefault(fname, []).append((float(c.value) * mult, c, cite))
         elif key == (ConstraintType.PRO_RATA_FULFILLMENT, AssetKey.NON_TRADED_REIT):
-            terms.reit_pro_rata = True
-            prov["reit_pro_rata"] = cite
+            qualitative.setdefault("reit_pro_rata", []).append((c, cite))
         elif key == (ConstraintType.SETTLEMENT_TIMING, AssetKey.NON_TRADED_REIT):
-            prov["reit_settlement_lag_months"] = f"{cite}; month-end repurchase + settlement -> 1-month lag (interpretation)"
+            qualitative.setdefault("reit_settlement_lag_months", []).append((c, cite))
+
+    conflicts = []
+    for fname, cands in numeric.items():
+        if len({round(v, 9) for v, _, _ in cands}) > 1:
+            conflicts.append({"term": fname, "constraint_type": cands[0][1].constraint_type.value,
+                              "asset_key": cands[0][1].asset_key.value,
+                              "candidates": [{"constraint_id": c.constraint_id, "value": float(c.value or 0),
+                                              "unit": c.unit, "document": c.document_name, "pdf_page": c.pdf_page,
+                                              "review_status": _status(c)} for _, c, _ in cands]})
+            continue
+        setattr(terms, fname, cands[0][0])
+        prov[fname] = "; ".join(cite for _, _, cite in cands)
+        terms.applied[fname] = [c.constraint_id for _, c, _ in cands]
+    lags = {settlement_lag_months(c) for c, _ in qualitative.get("reit_settlement_lag_months", [])}
+    if len(lags) > 1:
+        settles = qualitative["reit_settlement_lag_months"]
+        conflicts.append({"term": "reit_settlement_lag_months", "constraint_type": "settlement_timing",
+                          "asset_key": "non_traded_reit",
+                          "candidates": [{"constraint_id": c.constraint_id, "value": float(c.value or 0), "unit": c.unit,
+                                          "document": c.document_name, "pdf_page": c.pdf_page,
+                                          "review_status": _status(c)} for c, _ in settles]})
+    if conflicts:
+        raise TermConflictError(conflicts)
+    if "reit_pro_rata" in qualitative:
+        terms.reit_pro_rata = True
+        prov["reit_pro_rata"] = "; ".join(cite for _, cite in qualitative["reit_pro_rata"])
+        terms.applied["reit_pro_rata"] = [c.constraint_id for c, _ in qualitative["reit_pro_rata"]]
+    if "reit_settlement_lag_months" in qualitative:
+        settle = qualitative["reit_settlement_lag_months"]
+        terms.reit_settlement_lag_months = lags.pop()
+        prov["reit_settlement_lag_months"] = (
+            f"derived from {'; '.join(cite for _, cite in settle)}: settlement within the stated period after the "
+            f"month-end Repurchase Date is modelled as cash {terms.reit_settlement_lag_months} month(s) later "
+            "(interpretation, not a guaranteed date)")
+        terms.applied["reit_settlement_lag_months"] = [c.constraint_id for c, _ in settle]
+        terms.derived.append("reit_settlement_lag_months")
     terms.provenance = prov
     return terms
 
@@ -421,9 +526,10 @@ def simulate_contract_aware(s: Scenario, t: ContractTerms | None = None) -> Simu
                 q_used += executed
                 reit_fill = pro_rata_fill(demand, executed) if t.reit_pro_rata else (1.0 if demand <= executed else 0.0)
                 if reit_fill < 0.999:
-                    limiting = "quarterly 5% remaining" if capacity < t.reit_monthly_cap_pct - 1e-9 else "monthly 2%"
-                    binding.append(f"BREIT-style gate: {reit_fill:.0%} pro-rata fill ({limiting} cap; "
-                                   f"demand {demand:.1f}% of NAV)")
+                    limiting = (f"remaining quarterly {t.reit_quarterly_cap_pct:g}%"
+                                if capacity < t.reit_monthly_cap_pct - 1e-9 else f"monthly {t.reit_monthly_cap_pct:g}%")
+                    binding.append(f"REIT repurchase limit: {reit_fill:.0%} pro-rata fill ({limiting} fund-level cap; "
+                                   f"assumed demand {demand:.1f}% of NAV)")
             filled = reit_requested * reit_fill
             reit_u -= filled / f_reit
             reit_remaining -= filled

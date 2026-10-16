@@ -15,15 +15,17 @@ from decimal import Decimal
 
 from celery.exceptions import SoftTimeLimitExceeded
 from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from ..config import Settings, get_settings
+from ..crypto import CredentialDecryptionError, CredentialStorageUnavailable, get_cipher
 from ..db import session_scope
 from ..engine.constraint_extractor import extract_rule_based, extract_with_llm
 from ..engine.document_parser import PageText, ParsedDocument, detect_printed_page, parse_pdf_bytes
 from ..engine.llm_service import LLMError
 from ..engine.schemas import ContractConstraint, ExtractionMethod
-from ..llm import LLMProvider, ProviderError, TransientProviderError, get_provider
-from ..models import Document, DocumentPage, ExtractedConstraint, ProcessingJob
+from ..llm import LLMProvider, ProviderError, TransientProviderError, build_provider, get_provider
+from ..models import Document, DocumentPage, ExtractedConstraint, ProcessingJob, ProviderCredential
 from ..storage import Storage, StorageError, get_storage
 from .ocr import ocr_pages
 
@@ -79,19 +81,48 @@ def _dec(v: float | None) -> Decimal | None:
     return None if v is None else Decimal(str(v))
 
 
+def _redact(message: str, provider_obj: object) -> str:
+    """Never let a credential reach a job record or log, whatever an error message contains."""
+    secret = getattr(provider_obj, "api_key", "") or ""
+    return message.replace(secret, "[redacted]") if len(secret) >= 8 else message
+
+
+def resolve_provider(db: Session, requested_by: uuid.UUID | None,
+                     settings: Settings) -> tuple[LLMProvider | None, str]:
+    """Choose the extraction provider for a job: the requester's active BYOK key, else the server provider,
+    else none (rule-based). The decrypted key exists only in this worker process's memory."""
+    if requested_by is not None:
+        cred = db.scalar(select(ProviderCredential).where(ProviderCredential.user_id == requested_by,
+                                                          ProviderCredential.is_active.is_(True)))
+        if cred is not None and cred.status != "invalid":
+            try:
+                secret = get_cipher().decrypt(cred.ciphertext, owner=str(requested_by), provider=cred.provider)
+            except (CredentialStorageUnavailable, CredentialDecryptionError) as exc:
+                raise JobFailure("credential_unusable", "Your stored AI provider key could not be used. Replace it "
+                                 "in AI provider settings or deactivate it.") from exc
+            if cred.provider == "openai" and not cred.model:
+                raise JobFailure("model_required", "Choose an OpenAI model in AI provider settings.")
+            return build_provider(cred.provider, secret, cred.model, settings,
+                                  workspace_id=cred.workspace_id), "user_byok"
+    server = get_provider(settings)
+    return (server, "server") if server is not None else (None, "none")
+
+
 def run_pipeline(job_id: uuid.UUID, *, settings: Settings | None = None, storage: Storage | None = None,
                  provider: LLMProvider | None | bool = True) -> None:
     """Process a claimed (running) job. Raises TransientJobError or JobFailure; persists on success."""
     settings = settings or get_settings()
     storage = storage or get_storage()
-    provider_obj: LLMProvider | None = get_provider(settings) if provider is True else (provider or None)
-
     with session_scope() as db:
         job = db.get(ProcessingJob, job_id)
         doc = db.get(Document, job.document_id) if job else None
         if job is None or doc is None or not doc.storage_path:
             raise JobFailure("missing_document", "The document has no stored file.")
         storage_path, display_name, doc_id = doc.storage_path, doc.safe_filename, doc.id
+        if provider is True:
+            provider_obj, credential_source = resolve_provider(db, job.requested_by, settings)
+        else:
+            provider_obj, credential_source = (provider or None), ("injected" if provider else "none")
 
     try:
         data = storage.get(storage_path)
@@ -124,15 +155,25 @@ def run_pipeline(job_id: uuid.UUID, *, settings: Settings | None = None, storage
 
     _set_stage(job_id, "extracting", 55)
     method = ExtractionMethod.LLM if provider_obj else ExtractionMethod.RULE_BASED
+    # Record what is being attempted before calling the provider, so a failed AI job is distinguishable from a
+    # rule-based run (credential_source "none") and from a successful AI extraction (status "succeeded").
+    with session_scope() as db:
+        job = db.get(ProcessingJob, job_id)
+        if job is not None:
+            job.extraction_method = method.value
+            job.provider = provider_obj.name if provider_obj else None
+            job.model = provider_obj.model if provider_obj else None
+            job.credential_source = credential_source
     try:
         if provider_obj is not None:
             report = extract_with_llm(parsed, top_k=settings.llm_max_excerpts, call=provider_obj.extract_json)
         else:
             report = extract_rule_based(parsed)
     except TransientProviderError as exc:
-        raise TransientJobError(str(exc)) from exc
+        raise TransientJobError(_redact(str(exc), provider_obj)) from None
     except (ProviderError, LLMError) as exc:
-        raise JobFailure("extraction_failed", f"Extraction failed: {exc}"[:480]) from exc
+        code = getattr(exc, "code", None) or "extraction_failed"
+        raise JobFailure(code, _redact(f"Extraction failed: {exc}", provider_obj)[:480]) from None
 
     _set_stage(job_id, "saving", 85)
     with session_scope() as db:
@@ -141,9 +182,9 @@ def run_pipeline(job_id: uuid.UUID, *, settings: Settings | None = None, storage
         if job is None or doc is None or doc.status == "deleted":
             raise JobFailure("document_deleted", "The document was deleted during processing.")
         db.execute(delete(DocumentPage).where(DocumentPage.document_id == doc_id))
-        db.add_all([DocumentPage(document_id=doc_id, household_id=doc.household_id, pdf_page=p.pdf_page,
-                                 printed_page=p.printed_page, section=p.section, text=p.text.replace("\x00", ""),
-                                 ocr=p.pdf_page in ocr_used) for p in parsed.pages])
+        db.add_all([DocumentPage(document_id=doc_id, household_id=doc.household_id, fund_id=doc.fund_id,
+                                 pdf_page=p.pdf_page, printed_page=p.printed_page, section=p.section,
+                                 text=p.text.replace("\x00", ""), ocr=p.pdf_page in ocr_used) for p in parsed.pages])
         existing = {c.extraction_key: c for c in db.scalars(
             select(ExtractedConstraint).where(ExtractedConstraint.document_id == doc_id))}
         written = kept = 0
@@ -154,13 +195,17 @@ def run_pipeline(job_id: uuid.UUID, *, settings: Settings | None = None, storage
                 kept += 1  # never overwrite a reviewed constraint
                 continue
             values = dict(
-                household_id=doc.household_id, document_id=doc_id, job_id=job_id, extraction_key=key,
+                household_id=doc.household_id, fund_id=doc.fund_id, document_id=doc_id, job_id=job_id,
+                extraction_key=key,
                 constraint_type=c.constraint_type.value, asset_key=c.asset_key.value, description=c.description,
                 value=_dec(c.value), lower_bound=_dec(c.lower_bound), upper_bound=_dec(c.upper_bound),
                 original_value=_dec(c.value), unit=c.unit, timing=c.timing, conditions=c.conditions,
                 pdf_page=c.pdf_page, printed_page=c.printed_page, document_section=c.document_section,
                 evidence_quote=c.evidence_quote, quote_verified=c.quote_verified,
                 corroborating_pages=c.corroborating_pages, interpretation=c.interpretation,
+                value_kind=c.value_kind.value if c.value_kind else None, exceptions=list(c.exceptions),
+                discretion=c.discretion, effective_period=c.timing, ambiguous=c.ambiguous,
+                validation_issues=list(c.validation_issues),
                 confidence=c.confidence.value, source_type=c.source_type.value, review_status="needs_review",
                 extraction_method=method.value,
                 provider=provider_obj.name if provider_obj else None,
@@ -178,7 +223,14 @@ def run_pipeline(job_id: uuid.UUID, *, settings: Settings | None = None, storage
         job.extraction_method = method.value
         job.provider = provider_obj.name if provider_obj else None
         job.model = provider_obj.model if provider_obj else None
-        job.stats = {"pages": parsed.page_count, "pages_with_text": len(parsed.pages), "ocr_pages": len(ocr_used),
+        job.credential_source = credential_source
+        usage = getattr(provider_obj, "last_usage", None)
+        job.stats = {"llm_input_tokens": getattr(usage, "input_tokens", None),
+                     "llm_output_tokens": getattr(usage, "output_tokens", None),
+                     "llm_latency_ms": getattr(provider_obj, "last_latency_ms", None),
+                     "ambiguous_constraints": sum(c.ambiguous for c in report.constraints),
+                     "constraints_with_validation_issues": sum(bool(c.validation_issues) for c in report.constraints),
+                     "pages": parsed.page_count, "pages_with_text": len(parsed.pages), "ocr_pages": len(ocr_used),
                      "pages_without_text": len(parsed.failed_pages), "excerpts_used": report.excerpts_used,
                      "constraints_written": written, "reviewed_constraints_kept": kept,
                      "unverified_quotes": sum(not c.quote_verified for c in report.constraints),

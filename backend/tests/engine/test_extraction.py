@@ -82,19 +82,22 @@ def test_llm_output_strips_numbers_from_qualitative_clauses(monkeypatch):
     fake = {"terms": [
         {"excerpt_id": "unknown", "constraint_type": "pro_rata_fulfillment", "asset_key": "interval_fund",
          "description": "pro rata", "value": 35.0, "lower_bound": None, "upper_bound": None, "unit": "%",
-         "timing": None, "conditions": None, "evidence_quote": quote, "interpretation": "x",
+         "timing": None, "conditions": None, "exceptions": [], "discretion": None, "value_kind": "exact", "evidence_quote": quote, "interpretation": "x",
          "confidence": "high", "ambiguous": False},
         {"excerpt_id": "unknown", "constraint_type": "repurchase_fee", "asset_key": "interval_fund",
          "description": "fee", "value": 2.0, "lower_bound": None, "upper_bound": None, "unit": "%",
-         "timing": None, "conditions": None, "evidence_quote": "This sentence is not in the document.",
+         "timing": None, "conditions": None, "exceptions": [], "discretion": None, "value_kind": "exact", "evidence_quote": "This sentence is not in the document.",
          "interpretation": "x", "confidence": "high", "ambiguous": False},
     ]}
     monkeypatch.setattr("app.engine.constraint_extractor.call_structured", lambda *a, **k: fake)
     report = extract_with_llm(doc)
     pr, fee = report.constraints
     assert pr.constraint_type in QUALITATIVE_TYPES and pr.value is None
-    assert pr.quote_verified and pr.pdf_page == page.pdf_page
+    # The model cited no valid excerpt: the quote exists on page 1 but is not attributed to it silently.
+    issue = next(i for i in pr.validation_issues if i["code"] == "quote_not_on_cited_page")
+    assert not pr.quote_verified and issue["severity"] == "error" and f"PDF page(s) {page.pdf_page}" in issue["message"]
     assert not fee.quote_verified and fee.confidence.value == "low"
+    assert any(i["code"] == "quote_not_found" for i in fee.validation_issues)
     assert all(c.review_status == ReviewStatus.NEEDS_REVIEW for c in report.constraints)
 
 

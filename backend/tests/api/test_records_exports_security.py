@@ -96,7 +96,7 @@ def test_exports_have_correct_values(alice, client, run_ctx):
         f"/households/{hid}/exports", json={"kind": "report_pdf", "run_id": run["id"]}).json())
     with pymupdf.open(stream=pdf, filetype="pdf") as d:
         text = "".join(p.get_text() for p in d)
-    assert "SlipSlopes liquidity report" in text and "Month 4" in text
+    assert "OndhoDeck liquidity report" in text and "Month 4" in text
     listing = alice.get(f"/households/{hid}/exports").json()
     assert listing["total"] == 4
 

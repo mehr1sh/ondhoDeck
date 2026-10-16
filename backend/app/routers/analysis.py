@@ -12,6 +12,8 @@ from sqlalchemy.orm import Session
 from ..api_schemas import (
     ApplyOut,
     AssumptionField,
+    BlindSpotOut,
+    BlindSpotSummary,
     MonthOut,
     Page,
     PreventionOut,
@@ -36,6 +38,7 @@ from ..db import get_db
 from ..engine.optimizer import CostAssumptions
 from ..errors import ApiError
 from ..models import (
+    BlindSpotReport,
     Household,
     PreventionPlan,
     PreventionRecommendation,
@@ -45,7 +48,7 @@ from ..models import (
     StressResult,
 )
 from ..ratelimit import check_rate
-from ..services.analysis import run_prevention, run_simulation, run_stress
+from ..services.analysis import run_blind_spots, run_prevention, run_simulation, run_stress
 from ..services.engine_adapter import term_rows
 from .common import Pagination, apply_updates, paginate
 
@@ -81,7 +84,7 @@ FIELDS: list[tuple[str, str, str, str, str]] = [
     ("rsu_window_cash_floor_months", "Cash floor kept via RSU sales", "Household behaviour", "months",
      "In an open window, sell vested RSUs to hold this many months of net spending in cash."),
     ("sale_tax_drag", "Tax and trading cost per $ sold", "Costs", "percent", "Applied to securities sales."),
-    ("naive_liquid_fraction", "Naive baseline liquid fractions", "Naive baseline", "list",
+    ("naive_liquid_fraction", "Naive baseline liquid fractions", "Naive baseline", "percent",
      "Fixed share of each asset the simplified comparator treats as instantly saleable."),
     ("lever_reserve_prefund", "Pre-fund cash from brokerage", "Prevention levers", "money", "Sold before the stress."),
     ("lever_sbl_paydown", "SBL paydown from brokerage sale", "Prevention levers", "money", "Sold to repay the line."),
@@ -110,6 +113,33 @@ def scenario_defaults(user: CurrentUser = Depends(get_current_user)):
                                     for k, lb, g, kd, h in FIELDS])
 
 
+PRESETS: list[dict] = [
+    {"id": "mild_correction", "name": "Mild correction (10% drawdown)",
+     "description": "Equities fall 10% over 3 months; REIT board fills up to the caps.",
+     "overrides": {"equity_drawdown": 0.10}},
+    {"id": "drawdown_2022", "name": "2022-style drawdown (25%)",
+     "description": "Equities fall 25% over 3 months and stay low for 9 months; REIT board fills up to the caps.",
+     "overrides": {"equity_drawdown": 0.25}},
+    {"id": "severe", "name": "Severe drawdown (40%)",
+     "description": "Equities fall 40% over 3 months with elevated redemption demand.",
+     "overrides": {"equity_drawdown": 0.40, "reit_demand_sensitivity": 70.0}},
+    {"id": "reit_board_halves", "name": "25% drawdown, REIT board repurchases half the cap",
+     "description": "Uses the board's documented discretion to repurchase fewer shares than the limits allow.",
+     "overrides": {"equity_drawdown": 0.25, "reit_board_fill_factor": 0.5}},
+    {"id": "reit_suspended", "name": "25% drawdown, REIT repurchases suspended",
+     "description": "The board exercises its discretion to repurchase none; interval-fund offers continue.",
+     "overrides": {"equity_drawdown": 0.25, "reit_board_fill_factor": 0.0}},
+]
+
+
+@router.get("/scenario-presets")
+def scenario_presets(user: CurrentUser = Depends(get_current_user)) -> list[dict]:
+    """Named stress scenarios. Every value is a modelling assumption; redemption fulfilment is never guaranteed."""
+    base = ScenarioAssumptions().model_dump(mode="json")
+    return [{**p, "assumptions": ScenarioAssumptions.model_validate({**base, **p["overrides"]}).model_dump(),
+             "label": "Scenario assumption - not a contract term or forecast"} for p in PRESETS]
+
+
 @router.get("/households/{household_id}/scenarios", response_model=list[ScenarioOut])
 def list_scenarios(household_id: uuid.UUID, user: CurrentUser = Depends(get_current_user),
                    db: Session = Depends(get_db)):
@@ -124,7 +154,7 @@ def create_scenario(household_id: uuid.UUID, body: ScenarioIn, user: CurrentUser
                     db: Session = Depends(get_db)):
     require_household(db, user, household_id, "editor")
     s = ScenarioDefinition(household_id=household_id, name=body.name, description=body.description,
-                           assumptions=body.assumptions.model_dump(), created_by=user.id)
+                           assumptions=body.assumptions.model_dump(mode="json"), created_by=user.id)
     db.add(s)
     db.flush()
     audit(db, actor_id=user.id, action="scenario.created", entity_type="scenario", entity_id=s.id,
@@ -144,7 +174,7 @@ def update_scenario(scenario_id: uuid.UUID, body: ScenarioUpdate, user: CurrentU
     s, _ = _scenario(db, user, scenario_id, "editor")
     data = body.model_dump(exclude_unset=True)
     if "assumptions" in data and data["assumptions"] is not None:
-        data["assumptions"] = body.assumptions.model_dump()  # type: ignore[union-attr]
+        data["assumptions"] = body.assumptions.model_dump(mode="json")  # type: ignore[union-attr]
     changes = apply_updates(s, data)
     if changes:
         audit(db, actor_id=user.id, action="scenario.updated", entity_type="scenario", entity_id=s.id,
@@ -174,7 +204,8 @@ def run_detail(db: Session, run: SimulationRun) -> RunDetail:
     name = db.scalar(select(ScenarioDefinition.name).where(ScenarioDefinition.id == run.scenario_id)) or ""
     months = db.scalars(select(SimulationMonth).where(SimulationMonth.run_id == run.id)
                         .order_by(SimulationMonth.model, SimulationMonth.month)).all()
-    return RunDetail(**run_summary(run, name).model_dump(), inputs_snapshot=run.inputs_snapshot,
+    return RunDetail(**run_summary(run, name).model_dump(), explanation=run.explanation or {},
+                     inputs_snapshot=run.inputs_snapshot,
                      household_snapshot=run.household_snapshot, terms=term_rows(run.terms_snapshot),
                      constraint_versions=run.constraint_versions,
                      months=[MonthOut.model_validate(m) for m in months])
@@ -248,6 +279,40 @@ def get_stress(result_id: uuid.UUID, user: CurrentUser = Depends(get_current_use
     return require_owned(db, user, StressResult, result_id, label="Stress result")
 
 
+# ----------------------------------------------------------------------------- blind spots
+
+@router.post("/scenarios/{scenario_id}/blind-spots", response_model=BlindSpotOut, status_code=201)
+def create_blind_spots(scenario_id: uuid.UUID, user: CurrentUser = Depends(get_current_user),
+                       db: Session = Depends(get_db), settings: Settings = Depends(get_settings)):
+    """Run the fixed, deterministic stress battery and rank liquidity risks (see services/blind_spots)."""
+    s, h = _scenario(db, user, scenario_id, "editor")
+    check_rate(str(user.id), "compute", settings.rate_limit_compute_per_minute, 60)
+    rep = run_blind_spots(db, h, s, user.id)
+    db.flush()
+    audit(db, actor_id=user.id, action="blind_spots.run", entity_type="blind_spot_report", entity_id=rep.id,
+          household_id=h.id, details={"risks": rep.risk_count, "blind_spots": rep.blind_spot_count})
+    db.commit()
+    return rep
+
+
+@router.get("/households/{household_id}/blind-spot-reports", response_model=Page[BlindSpotSummary])
+def list_blind_spots(household_id: uuid.UUID, scenario_id: Optional[uuid.UUID] = None, p: Pagination = Depends(),
+                     user: CurrentUser = Depends(get_current_user), db: Session = Depends(get_db)):
+    require_household(db, user, household_id)
+    stmt = select(BlindSpotReport).where(BlindSpotReport.household_id == household_id)
+    if scenario_id:
+        stmt = stmt.where(BlindSpotReport.scenario_id == scenario_id)
+    rows, total = paginate(db, stmt.order_by(BlindSpotReport.created_at.desc()), p)
+    return Page(items=[BlindSpotSummary.model_validate(r[0]) for r in rows], total=total, limit=p.limit,
+                offset=p.offset)
+
+
+@router.get("/blind-spot-reports/{report_id}", response_model=BlindSpotOut)
+def get_blind_spots(report_id: uuid.UUID, user: CurrentUser = Depends(get_current_user),
+                    db: Session = Depends(get_db)):
+    return require_owned(db, user, BlindSpotReport, report_id, label="Blind-spot report")
+
+
 # ----------------------------------------------------------------------------- prevention
 
 def plan_out(plan: PreventionPlan) -> PreventionOut:
@@ -309,7 +374,7 @@ def apply_recommendation(rec_id: uuid.UUID, user: CurrentUser = Depends(get_curr
     levers = ([r for r in plan.recommendations if r.kind == "combined"] if rec.kind == "combined" else [rec])
     for r in levers:
         assumptions[r.lever] = float(r.amount)
-    validated = ScenarioAssumptions.model_validate(assumptions).model_dump()
+    validated = ScenarioAssumptions.model_validate(assumptions).model_dump(mode="json")
     suffix = "optimised plan" if rec.kind == "combined" else rec.name
     s = ScenarioDefinition(household_id=base.household_id, name=f"{base.name} + {suffix}"[:160],
                            description=f"Created from prevention plan {plan.id} (approved by user).",
