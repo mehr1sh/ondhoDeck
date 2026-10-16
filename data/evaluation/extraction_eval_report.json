@@ -1,0 +1,492 @@
+{
+  "generated_at": "2026-10-15T19:31:31+00:00",
+  "git_commit": "f5aeea3",
+  "git_dirty": true,
+  "python": "3.11.15",
+  "reference_file": "data/evaluation/expected_rules.jsonl",
+  "reference_sha256": "0389caa1470121e6ff1f73e78526566ca2be5c1f7214b894eb97c4d749f6178a",
+  "reference_rules": 19,
+  "label_status": "source_checked during dataset preparation; pending human sign-off; not LLM output",
+  "documents": {
+    "contract_breit_001": {
+      "sha256": "de00a0c5152763fe4f2fab3ea43182ff35cef383450a4b4a14b348d346bcbe2a",
+      "pages": 607,
+      "parse_s": 0.7,
+      "held_out_for_rule_based": false
+    },
+    "contract_interval_001": {
+      "sha256": "463d2129829974a5fb055699731d0a22dc2bf867d91e824e95f9a1c436884659",
+      "pages": 84,
+      "parse_s": 0.18,
+      "held_out_for_rule_based": true
+    },
+    "contract_interval_002": {
+      "sha256": "ae920c30a0e79169dde55dd2391002b9ce05ecb61a81c17648d4109a581ad2ab",
+      "pages": 265,
+      "parse_s": 0.26,
+      "held_out_for_rule_based": true
+    },
+    "contract_sbloc_001": {
+      "sha256": "128953153b7accb3558bc16985148c1cc79c9552096ef33bea697816dfde3a73",
+      "pages": 22,
+      "parse_s": 0.03,
+      "held_out_for_rule_based": true
+    },
+    "contract_lpa_001": {
+      "sha256": "582d5ca1bb968cf12ddcb86cd7e4454a5cf160ab5fed7af0fe74fa9a92fa6f88",
+      "pages": 48,
+      "parse_s": 0.04,
+      "held_out_for_rule_based": true
+    }
+  },
+  "type_map": {
+    "redemption_limit": [
+      "redemption_monthly_cap",
+      "redemption_quarterly_cap",
+      "repurchase_offer_size"
+    ],
+    "pro_rata_fulfillment": [
+      "pro_rata_fulfillment"
+    ],
+    "redemption_suspension": [
+      "board_discretion",
+      "redemption_suspension"
+    ],
+    "redemption_fee": [
+      "early_redemption_deduction",
+      "repurchase_fee"
+    ],
+    "redemption_settlement_timing": [
+      "payment_timing",
+      "settlement_timing"
+    ],
+    "demand_repayment": [
+      "demand_repayment"
+    ],
+    "collateral_maintenance_threshold": [
+      "sbl_maintenance_threshold"
+    ],
+    "termination_condition": [
+      "termination_condition"
+    ],
+    "capital_call_deadline": [
+      "capital_call_notice"
+    ],
+    "capital_commitment": [
+      "capital_commitment"
+    ],
+    "capital_call_default": [
+      "default_penalty"
+    ]
+  },
+  "retrieval_recall": {
+    "top_8": {
+      "recall": "18/19",
+      "held_out_recall": "13/13",
+      "per_document": {
+        "contract_breit_001": "5/6",
+        "contract_interval_001": "5/5",
+        "contract_interval_002": "2/2",
+        "contract_sbloc_001": "3/3",
+        "contract_lpa_001": "3/3"
+      }
+    },
+    "top_16": {
+      "recall": "18/19",
+      "held_out_recall": "13/13",
+      "per_document": {
+        "contract_breit_001": "5/6",
+        "contract_interval_001": "5/5",
+        "contract_interval_002": "2/2",
+        "contract_sbloc_001": "3/3",
+        "contract_lpa_001": "3/3"
+      }
+    },
+    "top_32": {
+      "recall": "19/19",
+      "held_out_recall": "13/13",
+      "per_document": {
+        "contract_breit_001": "6/6",
+        "contract_interval_001": "5/5",
+        "contract_interval_002": "2/2",
+        "contract_sbloc_001": "3/3",
+        "contract_lpa_001": "3/3"
+      }
+    }
+  },
+  "results": [
+    {
+      "extractor": "rule_based",
+      "overall": {
+        "reference_rules": 19,
+        "detected_with_correct_type": {
+          "correct": 6,
+          "n": 19,
+          "rate": 0.316
+        },
+        "of_detected": {
+          "value_correct": {
+            "correct": 4,
+            "n": 4,
+            "rate": 1.0
+          },
+          "unit_correct": {
+            "correct": 4,
+            "n": 4,
+            "rate": 1.0
+          },
+          "value_kind_correct": {
+            "correct": 6,
+            "n": 6,
+            "rate": 1.0
+          },
+          "conditions_presence_agrees": {
+            "correct": 4,
+            "n": 6,
+            "rate": 0.667
+          },
+          "exceptions_presence_agrees": {
+            "correct": 6,
+            "n": 6,
+            "rate": 1.0
+          },
+          "discretion_presence_agrees": {
+            "correct": 4,
+            "n": 6,
+            "rate": 0.667
+          },
+          "citation_correct": {
+            "correct": 6,
+            "n": 6,
+            "rate": 1.0
+          }
+        },
+        "predictions": 7,
+        "unsupported_predictions_quote_not_on_cited_page": 0,
+        "predictions_with_value_not_in_quote": 0,
+        "unmatched_predictions": 1
+      },
+      "held_out_only": {
+        "reference_rules": 13,
+        "detected_with_correct_type": {
+          "correct": 0,
+          "n": 13,
+          "rate": 0.0
+        },
+        "of_detected": {
+          "value_correct": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          },
+          "unit_correct": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          },
+          "value_kind_correct": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          },
+          "conditions_presence_agrees": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          },
+          "exceptions_presence_agrees": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          },
+          "discretion_presence_agrees": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          },
+          "citation_correct": {
+            "correct": 0,
+            "n": 0,
+            "rate": null
+          }
+        },
+        "predictions": 0,
+        "unsupported_predictions_quote_not_on_cited_page": 0,
+        "predictions_with_value_not_in_quote": 0,
+        "unmatched_predictions": 0
+      },
+      "schema_valid_rate": 1.0,
+      "latency_s_total": 0.15,
+      "cost": "0 (no model calls)",
+      "per_document": {
+        "contract_breit_001": {
+          "held_out": false,
+          "latency_s": 0.09,
+          "predictions": 7,
+          "schema_valid_output": true,
+          "error": null,
+          "tokens": null,
+          "detected": 6,
+          "reference_rules": 6
+        },
+        "contract_interval_001": {
+          "held_out": true,
+          "latency_s": 0.02,
+          "predictions": 0,
+          "schema_valid_output": true,
+          "error": null,
+          "tokens": null,
+          "detected": 0,
+          "reference_rules": 5
+        },
+        "contract_interval_002": {
+          "held_out": true,
+          "latency_s": 0.03,
+          "predictions": 0,
+          "schema_valid_output": true,
+          "error": null,
+          "tokens": null,
+          "detected": 0,
+          "reference_rules": 2
+        },
+        "contract_sbloc_001": {
+          "held_out": true,
+          "latency_s": 0.0,
+          "predictions": 0,
+          "schema_valid_output": true,
+          "error": null,
+          "tokens": null,
+          "detected": 0,
+          "reference_rules": 3
+        },
+        "contract_lpa_001": {
+          "held_out": true,
+          "latency_s": 0.01,
+          "predictions": 0,
+          "schema_valid_output": true,
+          "error": null,
+          "tokens": null,
+          "detected": 0,
+          "reference_rules": 3
+        }
+      },
+      "per_rule": [
+        {
+          "rule_id": "contract_breit_001:redemption_limit:eval_breit_01",
+          "document_id": "contract_breit_001",
+          "reference_type": "redemption_limit",
+          "detected": true,
+          "types_at_clause_if_missed": [],
+          "predicted_type": "redemption_monthly_cap",
+          "predicted_page": 53,
+          "reference_page": 53,
+          "predicted_value": 2.0,
+          "reference_value": 2.0,
+          "value_correct": true,
+          "unit_correct": true,
+          "value_kind_correct": true,
+          "conditions_presence_agrees": true,
+          "exceptions_presence_agrees": true,
+          "discretion_presence_agrees": false,
+          "citation_correct": true,
+          "validation_issue_codes": []
+        },
+        {
+          "rule_id": "contract_breit_001:redemption_limit:eval_breit_02",
+          "document_id": "contract_breit_001",
+          "reference_type": "redemption_limit",
+          "detected": true,
+          "types_at_clause_if_missed": [],
+          "predicted_type": "redemption_quarterly_cap",
+          "predicted_page": 53,
+          "reference_page": 53,
+          "predicted_value": 5.0,
+          "reference_value": 5.0,
+          "value_correct": true,
+          "unit_correct": true,
+          "value_kind_correct": true,
+          "conditions_presence_agrees": true,
+          "exceptions_presence_agrees": true,
+          "discretion_presence_agrees": false,
+          "citation_correct": true,
+          "validation_issue_codes": []
+        },
+        {
+          "rule_id": "contract_breit_001:pro_rata_fulfillment:eval_breit_03",
+          "document_id": "contract_breit_001",
+          "reference_type": "pro_rata_fulfillment",
+          "detected": true,
+          "types_at_clause_if_missed": [],
+          "predicted_type": "pro_rata_fulfillment",
+          "predicted_page": 53,
+          "reference_page": 53,
+          "predicted_value": null,
+          "reference_value": null,
+          "value_correct": null,
+          "unit_correct": null,
+          "value_kind_correct": true,
+          "conditions_presence_agrees": true,
+          "exceptions_presence_agrees": true,
+          "discretion_presence_agrees": true,
+          "citation_correct": true,
+          "validation_issue_codes": []
+        },
+        {
+          "rule_id": "contract_breit_001:redemption_suspension:eval_breit_04",
+          "document_id": "contract_breit_001",
+          "reference_type": "redemption_suspension",
+          "detected": true,
+          "types_at_clause_if_missed": [],
+          "predicted_type": "board_discretion",
+          "predicted_page": 53,
+          "reference_page": 53,
+          "predicted_value": null,
+          "reference_value": null,
+          "value_correct": null,
+          "unit_correct": null,
+          "value_kind_correct": true,
+          "conditions_presence_agrees": false,
+          "exceptions_presence_agrees": true,
+          "discretion_presence_agrees": true,
+          "citation_correct": true,
+          "validation_issue_codes": []
+        },
+        {
+          "rule_id": "contract_breit_001:redemption_fee:eval_breit_05",
+          "document_id": "contract_breit_001",
+          "reference_type": "redemption_fee",
+          "detected": true,
+          "types_at_clause_if_missed": [],
+          "predicted_type": "early_redemption_deduction",
+          "predicted_page": 103,
+          "reference_page": 103,
+          "predicted_value": 2.0,
+          "reference_value": 2.0,
+          "value_correct": true,
+          "unit_correct": true,
+          "value_kind_correct": true,
+          "conditions_presence_agrees": true,
+          "exceptions_presence_agrees": true,
+          "discretion_presence_agrees": true,
+          "citation_correct": true,
+          "validation_issue_codes": []
+        },
+        {
+          "rule_id": "contract_breit_001:redemption_settlement_timing:eval_breit_06",
+          "document_id": "contract_breit_001",
+          "reference_type": "redemption_settlement_timing",
+          "detected": true,
+          "types_at_clause_if_missed": [],
+          "predicted_type": "settlement_timing",
+          "predicted_page": 103,
+          "reference_page": 103,
+          "predicted_value": 3.0,
+          "reference_value": 3.0,
+          "value_correct": true,
+          "unit_correct": true,
+          "value_kind_correct": true,
+          "conditions_presence_agrees": false,
+          "exceptions_presence_agrees": true,
+          "discretion_presence_agrees": true,
+          "citation_correct": true,
+          "validation_issue_codes": []
+        },
+        {
+          "rule_id": "contract_interval_001:redemption_limit:eval_interval1_01",
+          "document_id": "contract_interval_001",
+          "reference_type": "redemption_limit",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_interval_001:redemption_limit:eval_interval1_02",
+          "document_id": "contract_interval_001",
+          "reference_type": "redemption_limit",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_interval_001:redemption_settlement_timing:eval_interval1_03",
+          "document_id": "contract_interval_001",
+          "reference_type": "redemption_settlement_timing",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_interval_001:pro_rata_fulfillment:eval_interval1_04",
+          "document_id": "contract_interval_001",
+          "reference_type": "pro_rata_fulfillment",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_interval_001:redemption_suspension:eval_interval1_05",
+          "document_id": "contract_interval_001",
+          "reference_type": "redemption_suspension",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_interval_002:redemption_limit:eval_interval2_01",
+          "document_id": "contract_interval_002",
+          "reference_type": "redemption_limit",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_interval_002:redemption_settlement_timing:eval_interval2_02",
+          "document_id": "contract_interval_002",
+          "reference_type": "redemption_settlement_timing",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_sbloc_001:demand_repayment:eval_sbloc_01",
+          "document_id": "contract_sbloc_001",
+          "reference_type": "demand_repayment",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_sbloc_001:collateral_maintenance_threshold:eval_sbloc_02",
+          "document_id": "contract_sbloc_001",
+          "reference_type": "collateral_maintenance_threshold",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_sbloc_001:termination_condition:eval_sbloc_03",
+          "document_id": "contract_sbloc_001",
+          "reference_type": "termination_condition",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_lpa_001:capital_call_deadline:eval_lpa_01",
+          "document_id": "contract_lpa_001",
+          "reference_type": "capital_call_deadline",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_lpa_001:capital_commitment:eval_lpa_02",
+          "document_id": "contract_lpa_001",
+          "reference_type": "capital_commitment",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        },
+        {
+          "rule_id": "contract_lpa_001:capital_call_default:eval_lpa_03",
+          "document_id": "contract_lpa_001",
+          "reference_type": "capital_call_default",
+          "detected": false,
+          "types_at_clause_if_missed": []
+        }
+      ]
+    },
+    {
+      "extractor": "llm",
+      "status": "not run: EVAL_LLM_PROVIDER not set to anthropic|openai"
+    }
+  ]
+}

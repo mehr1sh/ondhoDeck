@@ -1,0 +1,177 @@
+[
+  {
+    "kind": "case",
+    "id": "eval_breit_01",
+    "document_id": "contract_breit_001",
+    "source_page": 53,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_breit_02",
+    "document_id": "contract_breit_001",
+    "source_page": 53,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_breit_03",
+    "document_id": "contract_breit_001",
+    "source_page": 53,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_breit_04",
+    "document_id": "contract_breit_001",
+    "source_page": 53,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_breit_05",
+    "document_id": "contract_breit_001",
+    "source_page": 103,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_breit_06",
+    "document_id": "contract_breit_001",
+    "source_page": 103,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval1_01",
+    "document_id": "contract_interval_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval1_02",
+    "document_id": "contract_interval_001",
+    "source_page": 75,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval1_03",
+    "document_id": "contract_interval_001",
+    "source_page": 2,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval1_04",
+    "document_id": "contract_interval_001",
+    "source_page": 46,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval1_05",
+    "document_id": "contract_interval_001",
+    "source_page": 76,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval2_01",
+    "document_id": "contract_interval_002",
+    "source_page": 6,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_interval2_02",
+    "document_id": "contract_interval_002",
+    "source_page": 7,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_sbloc_01",
+    "document_id": "contract_sbloc_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_sbloc_02",
+    "document_id": "contract_sbloc_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_sbloc_03",
+    "document_id": "contract_sbloc_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_lpa_01",
+    "document_id": "contract_lpa_001",
+    "source_page": 13,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_lpa_02",
+    "document_id": "contract_lpa_001",
+    "source_page": 12,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "case",
+    "id": "eval_lpa_03",
+    "document_id": "contract_lpa_001",
+    "source_page": 14,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "example",
+    "id": "example_sbl_01",
+    "document_id": "contract_sbloc_synthetic_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "example",
+    "id": "example_sbl_02",
+    "document_id": "contract_sbloc_synthetic_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "example",
+    "id": "example_sbl_03",
+    "document_id": "contract_sbloc_synthetic_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "example",
+    "id": "example_lpa_01",
+    "document_id": "contract_lpa_synthetic_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "example",
+    "id": "example_rsu_01",
+    "document_id": "contract_rsu_synthetic_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  },
+  {
+    "kind": "example",
+    "id": "example_interval_01",
+    "document_id": "contract_interval_synthetic_001",
+    "source_page": 1,
+    "quote_check": "exact"
+  }
+]

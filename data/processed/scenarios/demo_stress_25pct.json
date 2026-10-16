@@ -1,0 +1,19 @@
+{
+  "scenario_id": "demo_stress_25pct",
+  "description": "2022-style equity drawdown. Every value is a modelling assumption, not a contract term or historical fact.",
+  "source": "synthetic_assumption",
+  "horizon_months": 24,
+  "assumptions": {
+    "equity_drawdown": 0.25,
+    "months_to_trough": 3,
+    "trough_hold_months": 9,
+    "recovery_share": 0.5,
+    "reit_base_demand_pct": 1.5,
+    "reit_demand_sensitivity": 50.0,
+    "reit_board_fill_factor": 1.0,
+    "interval_base_demand_pct": 3.0,
+    "interval_demand_sensitivity": 40.0,
+    "rsu_effective_tax_rate": 0.47
+  },
+  "notes": "Matches the defaults of backend/app/api_schemas.py ScenarioAssumptions. Redemption demand and board fill are assumptions: no supplied document discloses future fill rates."
+}

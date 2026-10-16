@@ -35,3 +35,9 @@ coverage/
 .env.local
 .env.*.local
 .vercel/
+
+# Data pipeline (see data/README.md): raw inputs, third-party documents and
+# regenerable intermediates stay local. README, manifest, schemas, labels,
+# evaluation sets and small processed outputs may be tracked.
+data/raw/
+data/interim/

@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slipslopes/client_profile.schema.json",
+  "title": "SlipSlopes demo client profile",
+  "description": "Every monetary or timing input is a {value, source, basis} object so its provenance is explicit.",
+  "type": "object",
+  "required": [
+    "profile_id",
+    "description",
+    "currency",
+    "starting_cash",
+    "monthly_income",
+    "monthly_expenses",
+    "liquid_investments",
+    "restricted_fund_holdings",
+    "private_equity_commitments",
+    "securities_backed_credit",
+    "rsu_grants",
+    "one_off_obligations",
+    "stress_scenario_ids"
+  ],
+  "$defs": {
+    "sourced": {
+      "type": "object",
+      "required": [
+        "value",
+        "source",
+        "basis"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "value": {
+          "type": [
+            "number",
+            "string",
+            "boolean"
+          ]
+        },
+        "source": {
+          "enum": [
+            "source_dataset",
+            "derived",
+            "synthetic_assumption"
+          ]
+        },
+        "basis": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  },
+  "properties": {
+    "profile_id": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "currency": {
+      "type": "string",
+      "pattern": "^[A-Z]{3}$"
+    },
+    "source_record": {
+      "type": "object"
+    },
+    "starting_cash": {
+      "$ref": "#/$defs/sourced"
+    },
+    "monthly_income": {
+      "$ref": "#/$defs/sourced"
+    },
+    "monthly_expenses": {
+      "$ref": "#/$defs/sourced"
+    },
+    "reported_savings": {
+      "$ref": "#/$defs/sourced"
+    },
+    "liquid_investments": {
+      "$ref": "#/$defs/sourced"
+    },
+    "restricted_fund_holdings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "amount"
+        ],
+        "properties": {
+          "amount": {
+            "$ref": "#/$defs/sourced"
+          }
+        }
+      }
+    },
+    "private_equity_commitments": {
+      "type": "array"
+    },
+    "securities_backed_credit": {
+      "type": "object"
+    },
+    "rsu_grants": {
+      "type": "array"
+    },
+    "one_off_obligations": {
+      "type": "array"
+    },
+    "stress_scenario_ids": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

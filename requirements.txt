@@ -9,3 +9,4 @@ scipy>=1.13
 anthropic>=1.0
 python-dotenv>=1.0
 pytest>=8.0
+jsonschema>=4.20  # data preparation scripts (scripts/)

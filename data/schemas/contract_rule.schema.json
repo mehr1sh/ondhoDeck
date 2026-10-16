@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "slipslopes/contract_rule.schema.json",
+  "title": "SlipSlopes contract rule",
+  "description": "One liquidity-relevant rule stated in a contract. clause_text must be verbatim from the source document. Values describe what the document states; a maximum (cap) is never a guaranteed payout. Discretion, conditions and exceptions are kept, not resolved.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["rule_id", "document_id", "constraint_type", "clause_text", "source_page", "source_section",
+               "value", "unit", "value_kind", "conditions", "exceptions", "discretion", "effective_period",
+               "source_type", "verification_status", "extraction_method"],
+  "properties": {
+    "rule_id": {"type": "string", "description": "Stable id: <document_id>:<constraint_type>:<n>"},
+    "document_id": {"type": "string", "description": "document_id from data/manifest.csv"},
+    "constraint_type": {
+      "type": "string",
+      "enum": ["redemption_limit", "redemption_notice_period", "redemption_settlement_timing",
+               "pro_rata_fulfillment", "redemption_suspension", "redemption_fee", "redemption_offer_frequency",
+               "redemption_resubmission", "collateral_advance_rate", "collateral_maintenance_threshold",
+               "margin_call_cure_period", "demand_repayment", "interest_rate", "capital_call_deadline",
+               "capital_commitment", "capital_call_default", "vesting_schedule", "tax_withholding",
+               "trading_window", "termination_condition", "other"]
+    },
+    "clause_text": {"type": "string", "minLength": 1, "description": "Verbatim excerpt (whitespace may be normalised)"},
+    "source_page": {"type": ["integer", "null"], "minimum": 1, "description": "1-based physical PDF page; null when the source has no meaningful page"},
+    "printed_page": {"type": ["string", "null"], "description": "Page label printed on the page, if detected"},
+    "source_section": {"type": ["string", "null"], "description": "Heading, section number or prospectus supplement the clause sits in"},
+    "value": {"type": ["number", "null"]},
+    "lower_bound": {"type": ["number", "null"]},
+    "upper_bound": {"type": ["number", "null"]},
+    "unit": {"type": ["string", "null"], "description": "e.g. '% of aggregate NAV', 'business days', '% per annum'"},
+    "value_kind": {
+      "type": "string",
+      "enum": ["maximum", "minimum", "exact", "range", "qualitative"],
+      "description": "maximum = a cap the issuer/lender may fill less of; never treat as a guaranteed amount"
+    },
+    "conditions": {"type": "array", "items": {"type": "string"}, "description": "Conditions under which the rule applies"},
+    "exceptions": {"type": "array", "items": {"type": "string"}, "description": "Stated exceptions or carve-outs"},
+    "discretion": {"type": ["string", "null"], "description": "Who may change, waive or suspend the rule (board, lender, general partner) and how"},
+    "effective_period": {"type": ["string", "null"], "description": "Period the value applies to, e.g. 'per calendar month', 'per quarterly offer'"},
+    "source_type": {"type": "string", "enum": ["real_public", "synthetic"]},
+    "verification_status": {
+      "type": "string",
+      "enum": ["unverified", "quote_matched", "source_checked", "human_verified", "quote_not_found"],
+      "description": "unverified = automatic output; quote_matched = clause_text found verbatim on source_page by script; source_checked = value/conditions read against the source page by a reviewer and quote matched; human_verified = signed off by a named person"
+    },
+    "extraction_method": {"type": "string", "enum": ["manual", "rule_based", "llm", "keyword_candidate"]},
+    "reviewer_notes": {"type": ["string", "null"]}
+  }
+}
