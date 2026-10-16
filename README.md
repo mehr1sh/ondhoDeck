@@ -12,7 +12,57 @@ runs out, and ranks costed ways to prevent it.
 
 > Real public contract documents; synthetic household. Prototype only, not financial advice.
 
-## Run it
+## Full-stack application
+
+The advisor application is a FastAPI backend with a Celery worker and a Next.js frontend; the original
+Streamlit prototype (`app.py`, below) shares the same calculation engine in `backend/app/engine/`.
+
+| Part | Where | What it does |
+|---|---|---|
+| API | `backend/app` (FastAPI, SQLAlchemy, Alembic) | Households, documents, terms review, simulations, fund library, reports |
+| Worker | `backend/app/worker.py` (Celery + Redis) | PDF parsing/OCR, term extraction, PDF report generation |
+| Engine | `backend/app/engine` | Deterministic simulator, reverse stress, prevention planner, extraction and evidence validation |
+| Frontend | `frontend` (Next.js 15, TypeScript, Tailwind) | Advisor workspace: Overview, Households, Fund Library, Documents, Review Queue, Liquidity Scenarios, Reports, Settings |
+| Auth/DB | Supabase Auth + PostgreSQL (local: `docker-compose.yml`) | Accounts, row-level security |
+
+**Set up and run locally:** [docs/LOCAL_DEVELOPMENT.md](docs/LOCAL_DEVELOPMENT.md) (services, migrations, API,
+worker, auth gateway, frontend, browser tests). Configuration templates contain placeholders only:
+`backend/.env.example` and `frontend/.env.example`. Deployment: [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
+**Checks** (the same commands CI runs):
+
+```bash
+cd backend && ruff check app tests scripts && mypy app && pytest          # uses the separate slipslopes_test database
+cd frontend && pnpm lint && pnpm typecheck && pnpm test && pnpm build
+```
+
+**Anthropic / OpenAI keys (BYOK).** Each advisor can store their own key under Settings → AI providers. Keys
+are encrypted at rest (`CREDENTIALS_ENCRYPTION_KEYS`), never returned by the API or logged, and used only by
+the worker. Anthropic keys that are not scoped to a workspace also need the workspace ID (`wrkspc_...`).
+Extraction uses the requester's active key, otherwise a server key, otherwise the rule-based extractor; every
+job records which (`extraction_method`, `provider`, `model`, `credential_source`), including failed attempts.
+
+**Extraction, review and simulation.**
+
+1. Upload a PDF (household agreement, or a public offering document into the Fund Library).
+2. Terms are extracted with a verbatim evidence quote. A quote counts as verified only on the page it cites;
+   unsupported numbers, units or limit wording are flagged, and related clauses of the same type are
+   cross-referenced rather than merged.
+3. An advisor approves, edits or rejects each term. Approval re-checks the quote against the cited page; a term
+   whose extracted value the quote does not support must be edited (it becomes a reviewer-confirmed value) or
+   rejected.
+4. Simulations use only approved, evidence-supported terms; this is enforced inside the engine. Disagreeing
+   approved terms block the run instead of one silently winning. Qualitative restrictions (board discretion,
+   suspension, resubmission) are listed as unmodelled risks, never given an invented numerical effect.
+5. Each run records the term versions it used; its explanation cites only the clauses the engine applied and
+   labels derived interpretations (e.g. settlement timing → a one-month cash lag) and default assumptions.
+
+**Known limitations.** One non-traded REIT and one interval-fund allocation per household; library terms are
+resolved at the projection start date; fill rates depend on a labelled demand assumption; the LLM extraction
+benchmark has not been run against the reference set (see `data/evaluation/extraction_eval_report.md`).
+More detail: [docs/FUND_LIBRARY.md](docs/FUND_LIBRARY.md), [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+
+## Streamlit prototype (`app.py`)
 
 ```bash
 uv venv --python 3.11 .venv            # or: python3.11 -m venv .venv
@@ -40,16 +90,15 @@ of them, with its PDF page:
 
 **The documents are not included in this repository** (they are third-party documents). Download them in a
 browser and save them under the names above; breit.com and sec.gov block scripted downloads without a
-declared contact. Then run `.venv/bin/python -m src.real_docs` to check them. HTML filings are rendered to
-PDF locally (`data/<name>.pdf`) so the same parse → extract → cite pipeline applies to them.
+declared contact. HTML filings are rendered to PDF locally (`data/<name>.pdf`) so the same parse → extract → cite
+pipeline applies to them.
 
-**Reproducibility.** Each document is pinned in `src/real_docs.py` by its URL and a fingerprint of its
-extracted text. A text fingerprint is used rather than a file checksum because EDGAR injects a different
+**Reproducibility.** Each document is pinned by its URL and a fingerprint of its extracted text (the pinning
+helper and its golden-number test are not included in this repository yet). A text fingerprint is used rather than a file checksum because EDGAR injects a different
 script tag into every download; the text, and therefore the extracted terms, do not change. If a
 document's text differs from the pinned version (for example a newer prospectus edition), the app re-extracts
 from it and says so. If a document is missing, the app uses its saved extraction in `backend/app/engine/fixtures/snapshots/`
-and says so, so the demo gives the same numbers on any machine. `tests/test_demo_golden.py` locks the
-headline numbers. Page numbers in this README refer to the 607-page BREIT bundle dated through Supplement
+and says so, so the demo gives the same numbers on any machine. Page numbers in this README refer to the 607-page BREIT bundle dated through Supplement
 No. 6 (Sept 16, 2026).
 
 ### Live LLM extraction
@@ -172,18 +221,18 @@ so the app does not display it. Fill rates in the simulator come only from the l
 ## Layout
 
 ```
-app.py                     Streamlit UI
-src/document_parser.py     PDF -> pages (pdf page, printed page, section)
-src/retrieval.py           keyword excerpt retrieval + de-duplication
-src/llm_service.py         Anthropic client, schema-constrained JSON
-src/constraint_extractor.py rule-based + LLM extraction, quote verification
-src/schemas.py             Pydantic constraint schema + enums
-src/real_docs.py           pinned real source documents; HTML filing -> PDF rendering
-src/synthetic_docs.py      SYNTHETIC sample PDFs (test fixtures only)
-src/simulator.py           24-month naive and contract-aware models
-src/reverse_stress.py      boundary search + counterfactual attribution
-src/optimizer.py           ranked options + sequential LP
-src/demo_data.py           seeded scenario, demo loading, extraction snapshots
-src/export.py              CSV / JSON export
-tests/                     pytest suite (incl. headless Streamlit smoke tests)
+app.py                       Streamlit prototype UI (imports the engine from backend/app/engine)
+backend/
+  app/                       FastAPI app: routers/, services/, llm/ (provider adapters), models.py, worker.py
+  app/engine/                document_parser, retrieval, constraint_extractor, contract_validation,
+                             llm_service, schemas, simulator, reverse_stress, optimizer, demo_data,
+                             synthetic_docs, export; fixtures/ (synthetic PDFs, extraction snapshots)
+  alembic/                   database migrations
+  scripts/                   local tooling (dev auth gateway, end-to-end check, fund-library backfill)
+  tests/                     pytest: api/ (against the test database) and engine/
+frontend/                    Next.js app; src/ (pages, components, lib), e2e/ (Playwright)
+data/                        manifest, schemas, labels, evaluation set and reports (raw inputs stay local)
+scripts/                     data preparation and extraction evaluation
+docs/                        architecture, API, local development, deployment, fund library
+tests/                       Streamlit prototype smoke tests
 ```

@@ -7,7 +7,7 @@ Docker; the API, worker, auth gateway and frontend run on the host.
 |---|---|
 | Frontend | http://localhost:3000 |
 | API (+ OpenAPI docs at `/docs`) | http://localhost:8000 |
-| Supabase Auth via dev gateway | http://localhost:54321/auth/v1 |
+| Supabase Auth via dev gateway | http://localhost:54331/auth/v1 |
 | Mailpit (confirmation / recovery emails) | http://localhost:8025 |
 | PostgreSQL | localhost:54329 |
 | Redis | localhost:6379 |
@@ -36,12 +36,15 @@ python scripts/dev_keys.py            # prints local ANON_KEY and SERVICE_ROLE_K
 # In .env set:
 #   SUPABASE_JWT_SECRET=local-dev-jwt-secret-at-least-32-characters-long
 #   SUPABASE_SERVICE_ROLE_KEY=<SERVICE_ROLE_KEY printed above>
+#   CREDENTIALS_ENCRYPTION_KEYS=<output of: python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())">
+#     (optional; enables Settings -> AI providers. Without it, key storage is disabled and
+#      extraction falls back to the server provider or rule-based extraction.)
 alembic upgrade head
 
 # three terminals:
 uvicorn app.main:app --reload --port 8000
 celery -A app.worker.celery_app worker --loglevel=INFO --concurrency=2 -Q slipslopes
-python scripts/dev_auth_proxy.py      # serves the local auth server under :54321/auth/v1
+python scripts/dev_auth_proxy.py      # serves the local auth server under :54331/auth/v1
 ```
 
 Check readiness: `curl localhost:8000/api/v1/ready`.
@@ -52,7 +55,7 @@ Check readiness: `curl localhost:8000/api/v1/ready`.
 cd frontend
 pnpm install
 cp .env.example .env.local
-# NEXT_PUBLIC_SUPABASE_URL=http://localhost:54321
+# NEXT_PUBLIC_SUPABASE_URL=http://localhost:54331
 # NEXT_PUBLIC_SUPABASE_ANON_KEY=<ANON_KEY printed by dev_keys.py>
 # NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 pnpm dev
@@ -87,3 +90,19 @@ pipeline. Demo data is labelled in the UI and in every record (`is_demo`, `is_de
 
 The BREIT prospectus is a third-party document and is not included in the repository; upload it through the
 document library to extract its share-repurchase terms.
+
+## Browser end-to-end tests
+
+`frontend/e2e/` drives the real UI with Playwright against a running local stack (API, worker, auth gateway,
+Mailpit and a frontend build). It registers a fresh account, confirms it through Mailpit, adds a library fund,
+uploads a synthetic test prospectus, approves a term, links a holding and runs the blind-spot check.
+
+```bash
+cd frontend
+pnpm build && pnpm start -p 3000          # or any port listed in the API's and gateway's CORS_ORIGINS
+E2E_BASE_URL=http://localhost:3000 pnpm exec playwright test
+```
+
+To test a build without replacing one that `pnpm start` is already serving, build into another directory
+(`NEXT_DIST_DIR=.next-verify pnpm build`, then `NEXT_DIST_DIR=.next-verify pnpm start -p 3100`) and add
+`http://localhost:3100` to `CORS_ORIGINS` for both the API and `scripts/dev_auth_proxy.py`.

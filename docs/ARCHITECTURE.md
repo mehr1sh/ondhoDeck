@@ -1,4 +1,4 @@
-# SlipSlopes architecture
+# OndhoDeck architecture
 
 ```
  Browser (Next.js on Vercel)

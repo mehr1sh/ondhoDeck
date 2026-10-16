@@ -1,4 +1,4 @@
-# SlipSlopes API (v1)
+# OndhoDeck API (v1)
 
 Base path: `/api/v1`. Interactive OpenAPI docs are served by the API at `/docs` (Swagger UI) and
 `/openapi.json`. Request/response models live in `backend/app/api_schemas.py`.

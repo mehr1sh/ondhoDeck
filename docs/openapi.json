@@ -1,7 +1,7 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "SlipSlopes API",
+    "title": "OndhoDeck API",
     "description": "Contractual liquidity intelligence: document extraction, deterministic cash-flow simulation, reverse stress testing and prevention planning.",
     "version": "1.0.0"
   },
@@ -2143,6 +2143,64 @@
         }
       }
     },
+    "/api/v1/constraints/{constraint_id}/supersede": {
+      "post": {
+        "tags": [
+          "constraints"
+        ],
+        "summary": "Supersede Constraint",
+        "description": "`constraint_id` (newer, approved) replaces `superseded_id` (older, approved, same owner and type) from\n`effective_date`. The older term keeps its history and still applies before that date.",
+        "operationId": "supersede_constraint_api_v1_constraints__constraint_id__supersede_post",
+        "parameters": [
+          {
+            "name": "constraint_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Constraint Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ConstraintSupersede"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/ConstraintOut"
+                  },
+                  "title": "Response Supersede Constraint Api V1 Constraints  Constraint Id  Supersede Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenario-defaults": {
       "get": {
         "tags": [
@@ -2157,6 +2215,33 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ScenarioDefaults"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/scenario-presets": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Scenario Presets",
+        "description": "Named stress scenarios. Every value is a modelling assumption; redemption fulfilment is never guaranteed.",
+        "operationId": "scenario_presets_api_v1_scenario_presets_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "additionalProperties": true,
+                    "type": "object"
+                  },
+                  "type": "array",
+                  "title": "Response Scenario Presets Api V1 Scenario Presets Get"
                 }
               }
             }
@@ -2756,6 +2841,176 @@
         }
       }
     },
+    "/api/v1/scenarios/{scenario_id}/blind-spots": {
+      "post": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Create Blind Spots",
+        "description": "Run the fixed, deterministic stress battery and rank liquidity risks (see services/blind_spots).",
+        "operationId": "create_blind_spots_api_v1_scenarios__scenario_id__blind_spots_post",
+        "parameters": [
+          {
+            "name": "scenario_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Scenario Id"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlindSpotOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/households/{household_id}/blind-spot-reports": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "List Blind Spots",
+        "operationId": "list_blind_spots_api_v1_households__household_id__blind_spot_reports_get",
+        "parameters": [
+          {
+            "name": "household_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Household Id"
+            }
+          },
+          {
+            "name": "scenario_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Scenario Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_BlindSpotSummary_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/blind-spot-reports/{report_id}": {
+      "get": {
+        "tags": [
+          "analysis"
+        ],
+        "summary": "Get Blind Spots",
+        "operationId": "get_blind_spots_api_v1_blind_spot_reports__report_id__get",
+        "parameters": [
+          {
+            "name": "report_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Report Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BlindSpotOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/scenarios/{scenario_id}/prevention": {
       "post": {
         "tags": [
@@ -3234,10 +3489,1358 @@
           }
         }
       }
+    },
+    "/api/v1/me/ai-providers": {
+      "get": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "List Ai Providers",
+        "operationId": "list_ai_providers_api_v1_me_ai_providers_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AIProvidersOut"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/ai-providers/{provider}": {
+      "put": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "Save Credential",
+        "description": "Create or replace the key for a provider, then test it with a request that generates no tokens.",
+        "operationId": "save_credential_api_v1_me_ai_providers__provider__put",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "anthropic",
+                "openai"
+              ],
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "Update Credential",
+        "operationId": "update_credential_api_v1_me_ai_providers__provider__patch",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "anthropic",
+                "openai"
+              ],
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CredentialUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CredentialOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "Delete Credential",
+        "operationId": "delete_credential_api_v1_me_ai_providers__provider__delete",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "anthropic",
+                "openai"
+              ],
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/ai-providers/{provider}/test": {
+      "post": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "Test Credential",
+        "operationId": "test_credential_api_v1_me_ai_providers__provider__test_post",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "anthropic",
+                "openai"
+              ],
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TestOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/ai-providers/{provider}/models": {
+      "get": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "List Provider Models",
+        "description": "Models available to the stored key, fetched live from the provider (no hardcoded catalogue).",
+        "operationId": "list_provider_models_api_v1_me_ai_providers__provider__models_get",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "enum": [
+                "anthropic",
+                "openai"
+              ],
+              "type": "string",
+              "title": "Provider"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/ai-providers-events": {
+      "get": {
+        "tags": [
+          "ai providers"
+        ],
+        "summary": "Ai Provider Events",
+        "description": "The caller's own key events (create, replace, test, update, delete). Details never contain keys.",
+        "operationId": "ai_provider_events_api_v1_me_ai_providers_events_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AuditOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/firms": {
+      "get": {
+        "tags": [
+          "firms"
+        ],
+        "summary": "My Firms",
+        "operationId": "my_firms_api_v1_me_firms_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FirmOut"
+                  },
+                  "type": "array",
+                  "title": "Response My Firms Api V1 Me Firms Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/firms/{firm_id}": {
+      "patch": {
+        "tags": [
+          "firms"
+        ],
+        "summary": "Rename Firm",
+        "operationId": "rename_firm_api_v1_firms__firm_id__patch",
+        "parameters": [
+          {
+            "name": "firm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Firm Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FirmOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/firms/{firm_id}/members": {
+      "get": {
+        "tags": [
+          "firms"
+        ],
+        "summary": "List Members",
+        "operationId": "list_members_api_v1_firms__firm_id__members_get",
+        "parameters": [
+          {
+            "name": "firm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Firm Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FirmMemberOut"
+                  },
+                  "title": "Response List Members Api V1 Firms  Firm Id  Members Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "firms"
+        ],
+        "summary": "Add Member",
+        "description": "Add an existing account (it must have signed in at least once) to the firm.",
+        "operationId": "add_member_api_v1_firms__firm_id__members_post",
+        "parameters": [
+          {
+            "name": "firm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Firm Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmMemberIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FirmMemberOut"
+                  },
+                  "title": "Response Add Member Api V1 Firms  Firm Id  Members Post"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/firms/{firm_id}/members/{user_id}": {
+      "patch": {
+        "tags": [
+          "firms"
+        ],
+        "summary": "Change Role",
+        "operationId": "change_role_api_v1_firms__firm_id__members__user_id__patch",
+        "parameters": [
+          {
+            "name": "firm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Firm Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FirmMemberUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/FirmMemberOut"
+                  },
+                  "title": "Response Change Role Api V1 Firms  Firm Id  Members  User Id  Patch"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "firms"
+        ],
+        "summary": "Remove Member",
+        "description": "Admins remove anyone; members may leave. The last admin cannot be removed.",
+        "operationId": "remove_member_api_v1_firms__firm_id__members__user_id__delete",
+        "parameters": [
+          {
+            "name": "firm_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Firm Id"
+            }
+          },
+          {
+            "name": "user_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "User Id"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funds": {
+      "get": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Search Funds",
+        "description": "Search funds in the caller's firms by name, issuer, ticker, SEC CIK or alias (case-insensitive).",
+        "operationId": "search_funds_api_v1_funds_get",
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "maxLength": 120
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Q"
+            }
+          },
+          {
+            "name": "fund_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Fund Type"
+            }
+          },
+          {
+            "name": "firm_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "uuid"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Firm Id"
+            }
+          },
+          {
+            "name": "include_archived",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Archived"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_FundOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Create Fund",
+        "operationId": "create_fund_api_v1_funds_post",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FundOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funds/{fund_id}": {
+      "get": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Get Fund",
+        "operationId": "get_fund_api_v1_funds__fund_id__get",
+        "parameters": [
+          {
+            "name": "fund_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Fund Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FundDetail"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Update Fund",
+        "operationId": "update_fund_api_v1_funds__fund_id__patch",
+        "parameters": [
+          {
+            "name": "fund_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Fund Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FundOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funds/{fund_id}/documents": {
+      "get": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "List Fund Documents",
+        "operationId": "list_fund_documents_api_v1_funds__fund_id__documents_get",
+        "parameters": [
+          {
+            "name": "fund_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Fund Id"
+            }
+          },
+          {
+            "name": "include_deleted",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Include Deleted"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/DocumentOut"
+                  },
+                  "title": "Response List Fund Documents Api V1 Funds  Fund Id  Documents Get"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Initiate Fund Upload",
+        "description": "Start uploading a public offering document (stored once per fund; identical files are deduplicated).",
+        "operationId": "initiate_fund_upload_api_v1_funds__fund_id__documents_post",
+        "parameters": [
+          {
+            "name": "fund_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Fund Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundDocumentInitiate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentInitiateOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/documents/{document_id}/library-metadata": {
+      "patch": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Update Fund Document",
+        "operationId": "update_fund_document_api_v1_documents__document_id__library_metadata_patch",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Document Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FundDocumentUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DocumentOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funds/{fund_id}/terms": {
+      "get": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Fund Terms",
+        "description": "All terms of the fund's live documents, plus which approved ones are in force on `as_of` (default today).",
+        "operationId": "fund_terms_api_v1_funds__fund_id__terms_get",
+        "parameters": [
+          {
+            "name": "fund_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Fund Id"
+            }
+          },
+          {
+            "name": "as_of",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "As Of"
+            }
+          },
+          {
+            "name": "review_status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Review Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FundTermsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/funds/{fund_id}/audit-events": {
+      "get": {
+        "tags": [
+          "fund library"
+        ],
+        "summary": "Fund Audit",
+        "operationId": "fund_audit_api_v1_funds__fund_id__audit_events_get",
+        "parameters": [
+          {
+            "name": "fund_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid",
+              "title": "Fund Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "default": 0,
+              "title": "Offset"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Page_AuditOut_"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/review-queue": {
+      "get": {
+        "tags": [
+          "workspace"
+        ],
+        "summary": "Review Queue",
+        "operationId": "review_queue_api_v1_me_review_queue_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 200,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReviewQueueOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/scenarios": {
+      "get": {
+        "tags": [
+          "workspace"
+        ],
+        "summary": "My Scenarios",
+        "operationId": "my_scenarios_api_v1_me_scenarios_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScenarioListItem"
+                  },
+                  "type": "array",
+                  "title": "Response My Scenarios Api V1 Me Scenarios Get"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/me/reports": {
+      "get": {
+        "tags": [
+          "workspace"
+        ],
+        "summary": "My Reports",
+        "operationId": "my_reports_api_v1_me_reports_get",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 500,
+              "minimum": 1,
+              "default": 100,
+              "title": "Limit"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReportsOut"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AIProvidersOut": {
+        "properties": {
+          "storage_available": {
+            "type": "boolean",
+            "title": "Storage Available"
+          },
+          "storage_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Storage Message"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ProviderInfo"
+            },
+            "type": "array",
+            "title": "Providers"
+          },
+          "credentials": {
+            "items": {
+              "$ref": "#/components/schemas/CredentialOut"
+            },
+            "type": "array",
+            "title": "Credentials"
+          },
+          "active_provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "anthropic",
+                  "openai"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Active Provider"
+          },
+          "server_fallback": {
+            "$ref": "#/components/schemas/ServerFallback"
+          },
+          "extraction_order": {
+            "type": "string",
+            "title": "Extraction Order",
+            "default": "Your active key if it is valid; otherwise the server provider if configured; otherwise deterministic rule-based extraction."
+          }
+        },
+        "type": "object",
+        "required": [
+          "storage_available",
+          "storage_message",
+          "providers",
+          "credentials",
+          "active_provider",
+          "server_fallback"
+        ],
+        "title": "AIProvidersOut"
+      },
       "AccountDelete": {
         "properties": {
           "confirm": {
@@ -3345,6 +4948,19 @@
               }
             ],
             "title": "Liquidity Notes"
+          },
+          "fund_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Id",
+            "description": "Shared library fund this holding is in (same firm)"
           }
         },
         "type": "object",
@@ -3420,6 +5036,29 @@
               }
             ],
             "title": "Liquidity Notes"
+          },
+          "fund_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Id"
+          },
+          "fund_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Name"
           },
           "updated_at": {
             "type": "string",
@@ -3553,6 +5192,19 @@
               }
             ],
             "title": "Liquidity Notes"
+          },
+          "fund_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Id",
+            "description": "Set to link a library fund; null to unlink"
           }
         },
         "type": "object",
@@ -3660,6 +5312,135 @@
           "created_at"
         ],
         "title": "AuditOut"
+      },
+      "BlindSpotOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Household Id"
+          },
+          "scenario_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Scenario Id"
+          },
+          "engine_version": {
+            "type": "string",
+            "title": "Engine Version"
+          },
+          "as_of_date": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of Date"
+          },
+          "risk_count": {
+            "type": "integer",
+            "title": "Risk Count"
+          },
+          "blind_spot_count": {
+            "type": "integer",
+            "title": "Blind Spot Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "warnings": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Warnings"
+          },
+          "constraint_versions": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Constraint Versions"
+          },
+          "result": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "household_id",
+          "scenario_id",
+          "engine_version",
+          "as_of_date",
+          "risk_count",
+          "blind_spot_count",
+          "created_at",
+          "warnings",
+          "constraint_versions",
+          "result"
+        ],
+        "title": "BlindSpotOut"
+      },
+      "BlindSpotSummary": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Household Id"
+          },
+          "scenario_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Scenario Id"
+          },
+          "engine_version": {
+            "type": "string",
+            "title": "Engine Version"
+          },
+          "as_of_date": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of Date"
+          },
+          "risk_count": {
+            "type": "integer",
+            "title": "Risk Count"
+          },
+          "blind_spot_count": {
+            "type": "integer",
+            "title": "Blind Spot Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "household_id",
+          "scenario_id",
+          "engine_version",
+          "as_of_date",
+          "risk_count",
+          "blind_spot_count",
+          "created_at"
+        ],
+        "title": "BlindSpotSummary"
       },
       "CashFlowIn": {
         "properties": {
@@ -3845,9 +5626,28 @@
             "title": "Id"
           },
           "household_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Household Id"
+          },
+          "fund_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Id"
           },
           "document_id": {
             "type": "string",
@@ -3997,6 +5797,61 @@
             "type": "string",
             "title": "Interpretation"
           },
+          "value_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Kind"
+          },
+          "exceptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exceptions",
+            "default": []
+          },
+          "discretion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discretion"
+          },
+          "effective_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Period"
+          },
+          "ambiguous": {
+            "type": "boolean",
+            "title": "Ambiguous",
+            "default": false
+          },
+          "validation_issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Validation Issues",
+            "default": []
+          },
           "confidence": {
             "type": "string",
             "title": "Confidence"
@@ -4046,6 +5901,18 @@
             "title": "Is Qualitative",
             "default": false
           },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By"
+          },
           "reviewed_at": {
             "anyOf": [
               {
@@ -4057,6 +5924,42 @@
               }
             ],
             "title": "Reviewed At"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
           },
           "updated_at": {
             "type": "string",
@@ -4075,7 +5978,6 @@
         "type": "object",
         "required": [
           "id",
-          "household_id",
           "document_id",
           "revision",
           "constraint_type",
@@ -4114,9 +6016,28 @@
             "title": "Id"
           },
           "household_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Household Id"
+          },
+          "fund_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Id"
           },
           "document_id": {
             "type": "string",
@@ -4266,6 +6187,61 @@
             "type": "string",
             "title": "Interpretation"
           },
+          "value_kind": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Kind"
+          },
+          "exceptions": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Exceptions",
+            "default": []
+          },
+          "discretion": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discretion"
+          },
+          "effective_period": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Period"
+          },
+          "ambiguous": {
+            "type": "boolean",
+            "title": "Ambiguous",
+            "default": false
+          },
+          "validation_issues": {
+            "items": {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            "type": "array",
+            "title": "Validation Issues",
+            "default": []
+          },
           "confidence": {
             "type": "string",
             "title": "Confidence"
@@ -4315,6 +6291,18 @@
             "title": "Is Qualitative",
             "default": false
           },
+          "reviewed_by": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewed By"
+          },
           "reviewed_at": {
             "anyOf": [
               {
@@ -4327,6 +6315,42 @@
             ],
             "title": "Reviewed At"
           },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To"
+          },
+          "superseded_by_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By Id"
+          },
           "updated_at": {
             "type": "string",
             "format": "date-time",
@@ -4336,7 +6360,6 @@
         "type": "object",
         "required": [
           "id",
-          "household_id",
           "document_id",
           "revision",
           "constraint_type",
@@ -4366,6 +6389,59 @@
           "updated_at"
         ],
         "title": "ConstraintOut"
+      },
+      "ConstraintSupersede": {
+        "properties": {
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision",
+            "description": "Revision of the newer (superseding) term"
+          },
+          "superseded_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Superseded Id"
+          },
+          "superseded_expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Superseded Expected Revision"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date",
+            "description": "Defaults to the newer term's effective_from, then its document's effective date"
+          },
+          "note": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 500
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note"
+          }
+        },
+        "type": "object",
+        "required": [
+          "expected_revision",
+          "superseded_id",
+          "superseded_expected_revision"
+        ],
+        "title": "ConstraintSupersede",
+        "description": "Mark an approved term as replacing an older approved term of the same type (e.g. from a supplement)."
       },
       "ConstraintUpdate": {
         "properties": {
@@ -4465,6 +6541,89 @@
             ],
             "title": "Interpretation"
           },
+          "value_kind": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "maximum",
+                  "minimum",
+                  "exact",
+                  "range",
+                  "qualitative"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Value Kind"
+          },
+          "exceptions": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exceptions"
+          },
+          "discretion": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 2000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Discretion"
+          },
+          "effective_period": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 160
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Period"
+          },
+          "effective_from": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective From",
+            "description": "First date the term applies (inclusive)"
+          },
+          "effective_to": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective To",
+            "description": "Date the term stops applying (exclusive)"
+          },
           "review_status": {
             "anyOf": [
               {
@@ -4542,6 +6701,191 @@
         "type": "object",
         "title": "CostAssumptionsIn"
       },
+      "CredentialIn": {
+        "properties": {
+          "api_key": {
+            "type": "string",
+            "maxLength": 400,
+            "minLength": 20,
+            "title": "Api Key"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^wrkspc_[A-Za-z0-9]{6,58}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id",
+            "description": "Anthropic workspace ID, for keys not scoped to a workspace"
+          },
+          "activate": {
+            "type": "boolean",
+            "title": "Activate",
+            "default": true
+          }
+        },
+        "type": "object",
+        "required": [
+          "api_key"
+        ],
+        "title": "CredentialIn"
+      },
+      "CredentialOut": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "key_hint": {
+            "type": "string",
+            "title": "Key Hint"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id"
+          },
+          "is_active": {
+            "type": "boolean",
+            "title": "Is Active"
+          },
+          "status": {
+            "type": "string",
+            "title": "Status"
+          },
+          "last_tested_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Tested At"
+          },
+          "last_error_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error Code"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "key_hint",
+          "model",
+          "is_active",
+          "status",
+          "last_tested_at",
+          "last_error_code",
+          "last_error",
+          "updated_at"
+        ],
+        "title": "CredentialOut"
+      },
+      "CredentialUpdate": {
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 120
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "workspace_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^wrkspc_[A-Za-z0-9]{6,58}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Workspace Id",
+            "description": "Set null to clear"
+          },
+          "is_active": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Active"
+          }
+        },
+        "type": "object",
+        "title": "CredentialUpdate"
+      },
       "DocumentInitiate": {
         "properties": {
           "filename": {
@@ -4554,6 +6898,8 @@
             "type": "string",
             "enum": [
               "prospectus",
+              "prospectus_supplement",
+              "statement_of_additional_information",
               "interval_fund",
               "private_fund_agreement",
               "sbl_agreement",
@@ -4624,9 +6970,52 @@
             "title": "Id"
           },
           "household_id": {
-            "type": "string",
-            "format": "uuid",
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
             "title": "Household Id"
+          },
+          "fund_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Id"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "supersedes_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Document Id"
           },
           "category": {
             "type": "string",
@@ -4763,7 +7152,6 @@
         "type": "object",
         "required": [
           "id",
-          "household_id",
           "category",
           "original_filename",
           "content_type",
@@ -5023,7 +7411,8 @@
               "constraints_json",
               "simulation_csv",
               "results_json",
-              "report_pdf"
+              "report_pdf",
+              "blind_spot_pdf"
             ],
             "title": "Kind"
           },
@@ -5038,6 +7427,18 @@
               }
             ],
             "title": "Run Id"
+          },
+          "blind_spot_report_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blind Spot Report Id"
           }
         },
         "type": "object",
@@ -5069,6 +7470,18 @@
               }
             ],
             "title": "Run Id"
+          },
+          "blind_spot_report_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blind Spot Report Id"
           },
           "kind": {
             "type": "string",
@@ -5150,6 +7563,896 @@
         ],
         "title": "ExportOut"
       },
+      "FirmMemberIn": {
+        "properties": {
+          "email": {
+            "type": "string",
+            "maxLength": 320,
+            "minLength": 3,
+            "title": "Email",
+            "description": "Email of an existing OndhoDeck account"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer",
+              "advisor"
+            ],
+            "title": "Role",
+            "default": "advisor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "email"
+        ],
+        "title": "FirmMemberIn"
+      },
+      "FirmMemberOut": {
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "User Id"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email"
+          },
+          "display_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Display Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer",
+              "advisor"
+            ],
+            "title": "Role"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id",
+          "email",
+          "display_name",
+          "role",
+          "created_at"
+        ],
+        "title": "FirmMemberOut"
+      },
+      "FirmMemberUpdate": {
+        "properties": {
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer",
+              "advisor"
+            ],
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "role"
+        ],
+        "title": "FirmMemberUpdate"
+      },
+      "FirmOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer",
+              "advisor"
+            ],
+            "title": "Role"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "role",
+          "created_at"
+        ],
+        "title": "FirmOut"
+      },
+      "FirmUpdate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 160,
+            "minLength": 1,
+            "title": "Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name"
+        ],
+        "title": "FirmUpdate"
+      },
+      "FundDetail": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "firm_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Firm Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "fund_type": {
+            "type": "string",
+            "enum": [
+              "non_traded_reit",
+              "interval_fund",
+              "private_fund",
+              "other"
+            ],
+            "title": "Fund Type"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "share_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Class"
+          },
+          "sec_cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sec Cik"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "metadata_status": {
+            "type": "string",
+            "enum": [
+              "needs_review",
+              "verified"
+            ],
+            "title": "Metadata Status"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count",
+            "default": 0
+          },
+          "approved_term_count": {
+            "type": "integer",
+            "title": "Approved Term Count",
+            "default": 0
+          },
+          "pending_term_count": {
+            "type": "integer",
+            "title": "Pending Term Count",
+            "default": 0
+          },
+          "your_role": {
+            "type": "string",
+            "enum": [
+              "admin",
+              "reviewer",
+              "advisor"
+            ],
+            "title": "Your Role"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentOut"
+            },
+            "type": "array",
+            "title": "Documents",
+            "default": []
+          },
+          "linked_holdings": {
+            "items": {
+              "$ref": "#/components/schemas/FundHoldingOut"
+            },
+            "type": "array",
+            "title": "Linked Holdings",
+            "default": []
+          },
+          "linked_holdings_total": {
+            "type": "integer",
+            "title": "Linked Holdings Total",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "firm_id",
+          "name",
+          "fund_type",
+          "issuer",
+          "ticker",
+          "share_class",
+          "sec_cik",
+          "aliases",
+          "description",
+          "metadata_status",
+          "status",
+          "created_at",
+          "updated_at",
+          "your_role"
+        ],
+        "title": "FundDetail"
+      },
+      "FundDocumentInitiate": {
+        "properties": {
+          "filename": {
+            "type": "string",
+            "maxLength": 255,
+            "minLength": 1,
+            "title": "Filename"
+          },
+          "category": {
+            "type": "string",
+            "enum": [
+              "prospectus",
+              "prospectus_supplement",
+              "statement_of_additional_information",
+              "interval_fund",
+              "other"
+            ],
+            "title": "Category"
+          },
+          "size_bytes": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Size Bytes"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "supersedes_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Document Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "filename",
+          "category",
+          "size_bytes"
+        ],
+        "title": "FundDocumentInitiate",
+        "description": "Upload a public offering document into the shared library (household agreements stay private)."
+      },
+      "FundDocumentUpdate": {
+        "properties": {
+          "effective_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Effective Date"
+          },
+          "supersedes_document_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Document Id"
+          }
+        },
+        "type": "object",
+        "title": "FundDocumentUpdate"
+      },
+      "FundHoldingOut": {
+        "properties": {
+          "asset_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Asset Id"
+          },
+          "asset_name": {
+            "type": "string",
+            "title": "Asset Name"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Household Id"
+          },
+          "household_name": {
+            "type": "string",
+            "title": "Household Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "asset_id",
+          "asset_name",
+          "household_id",
+          "household_name"
+        ],
+        "title": "FundHoldingOut",
+        "description": "A holding linked to the fund, limited to households the caller is a member of."
+      },
+      "FundIn": {
+        "properties": {
+          "firm_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firm Id",
+            "description": "Defaults to the caller's first firm"
+          },
+          "name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "fund_type": {
+            "type": "string",
+            "enum": [
+              "non_traded_reit",
+              "interval_fund",
+              "private_fund",
+              "other"
+            ],
+            "title": "Fund Type"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "pattern": "^[A-Za-z0-9.\\-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "share_class": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Class"
+          },
+          "sec_cik": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{1,10}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sec Cik"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Aliases"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "fund_type"
+        ],
+        "title": "FundIn"
+      },
+      "FundOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "firm_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Firm Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "fund_type": {
+            "type": "string",
+            "enum": [
+              "non_traded_reit",
+              "interval_fund",
+              "private_fund",
+              "other"
+            ],
+            "title": "Fund Type"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "share_class": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Class"
+          },
+          "sec_cik": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sec Cik"
+          },
+          "aliases": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Aliases"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "metadata_status": {
+            "type": "string",
+            "enum": [
+              "needs_review",
+              "verified"
+            ],
+            "title": "Metadata Status"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "document_count": {
+            "type": "integer",
+            "title": "Document Count",
+            "default": 0
+          },
+          "approved_term_count": {
+            "type": "integer",
+            "title": "Approved Term Count",
+            "default": 0
+          },
+          "pending_term_count": {
+            "type": "integer",
+            "title": "Pending Term Count",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "firm_id",
+          "name",
+          "fund_type",
+          "issuer",
+          "ticker",
+          "share_class",
+          "sec_cik",
+          "aliases",
+          "description",
+          "metadata_status",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FundOut"
+      },
+      "FundTermsOut": {
+        "properties": {
+          "as_of": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of"
+          },
+          "terms": {
+            "items": {
+              "$ref": "#/components/schemas/ConstraintOut"
+            },
+            "type": "array",
+            "title": "Terms"
+          },
+          "applicable_ids": {
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "type": "array",
+            "title": "Applicable Ids",
+            "description": "Approved terms in force on as_of (what a simulation starting on that date would use)"
+          }
+        },
+        "type": "object",
+        "required": [
+          "as_of",
+          "terms",
+          "applicable_ids"
+        ],
+        "title": "FundTermsOut"
+      },
+      "FundUpdate": {
+        "properties": {
+          "name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Name"
+          },
+          "fund_type": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "non_traded_reit",
+                  "interval_fund",
+                  "private_fund",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fund Type"
+          },
+          "issuer": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issuer"
+          },
+          "ticker": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 16,
+                "pattern": "^[A-Za-z0-9.\\-]+$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ticker"
+          },
+          "share_class": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 40
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Share Class"
+          },
+          "sec_cik": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^[0-9]{1,10}$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sec Cik"
+          },
+          "aliases": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array",
+                "maxItems": 20
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Aliases"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 4000
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "metadata_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "needs_review",
+                  "verified"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metadata Status"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "active",
+                  "archived"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "title": "FundUpdate"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5226,6 +8529,19 @@
               }
             ],
             "title": "Notes"
+          },
+          "firm_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Firm Id",
+            "description": "Firm whose fund library this household may use; defaults to the caller's first firm"
           }
         },
         "type": "object",
@@ -5268,6 +8584,11 @@
             "type": "boolean",
             "title": "Is Demo"
           },
+          "firm_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Firm Id"
+          },
           "role": {
             "type": "string",
             "enum": [
@@ -5296,6 +8617,7 @@
           "start_calendar_month",
           "notes",
           "is_demo",
+          "firm_id",
           "role",
           "created_at",
           "updated_at"
@@ -5502,6 +8824,17 @@
               }
             ],
             "title": "Model"
+          },
+          "credential_source": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Credential Source"
           },
           "error_code": {
             "anyOf": [
@@ -5856,6 +9189,31 @@
         "type": "object",
         "title": "LiabilityUpdate"
       },
+      "ModelsOut": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "models": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "models"
+        ],
+        "title": "ModelsOut"
+      },
       "MonthOut": {
         "properties": {
           "model": {
@@ -6043,6 +9401,37 @@
         ],
         "title": "Page[AuditOut]"
       },
+      "Page_BlindSpotSummary_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/BlindSpotSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[BlindSpotSummary]"
+      },
       "Page_DocumentOut_": {
         "properties": {
           "items": {
@@ -6104,6 +9493,37 @@
           "offset"
         ],
         "title": "Page[ExportOut]"
+      },
+      "Page_FundOut_": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/FundOut"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "limit": {
+            "type": "integer",
+            "title": "Limit"
+          },
+          "offset": {
+            "type": "integer",
+            "title": "Offset"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "limit",
+          "offset"
+        ],
+        "title": "Page[FundOut]"
       },
       "Page_HouseholdOut_": {
         "properties": {
@@ -6436,6 +9856,40 @@
         "type": "object",
         "title": "ProfileUpdate"
       },
+      "ProviderInfo": {
+        "properties": {
+          "provider": {
+            "type": "string",
+            "enum": [
+              "anthropic",
+              "openai"
+            ],
+            "title": "Provider"
+          },
+          "label": {
+            "type": "string",
+            "title": "Label"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Default Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "provider",
+          "label",
+          "default_model"
+        ],
+        "title": "ProviderInfo"
+      },
       "RecommendationDecision": {
         "properties": {
           "decision": {
@@ -6587,6 +10041,279 @@
         ],
         "title": "RecommendationOut"
       },
+      "ReportBlindSpotItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Household Id"
+          },
+          "scenario_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Scenario Id"
+          },
+          "engine_version": {
+            "type": "string",
+            "title": "Engine Version"
+          },
+          "as_of_date": {
+            "type": "string",
+            "format": "date",
+            "title": "As Of Date"
+          },
+          "risk_count": {
+            "type": "integer",
+            "title": "Risk Count"
+          },
+          "blind_spot_count": {
+            "type": "integer",
+            "title": "Blind Spot Count"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "household_name": {
+            "type": "string",
+            "title": "Household Name"
+          },
+          "scenario_name": {
+            "type": "string",
+            "title": "Scenario Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "household_id",
+          "scenario_id",
+          "engine_version",
+          "as_of_date",
+          "risk_count",
+          "blind_spot_count",
+          "created_at",
+          "household_name",
+          "scenario_name"
+        ],
+        "title": "ReportBlindSpotItem"
+      },
+      "ReportExportItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Household Id"
+          },
+          "run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Run Id"
+          },
+          "blind_spot_report_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Blind Spot Report Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "queued",
+              "running",
+              "ready",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "filename": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Filename"
+          },
+          "size_bytes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Size Bytes"
+          },
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Created At"
+          },
+          "completed_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed At"
+          },
+          "household_name": {
+            "type": "string",
+            "title": "Household Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "household_id",
+          "run_id",
+          "kind",
+          "status",
+          "filename",
+          "size_bytes",
+          "error_message",
+          "created_at",
+          "completed_at",
+          "household_name"
+        ],
+        "title": "ReportExportItem"
+      },
+      "ReportsOut": {
+        "properties": {
+          "exports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportExportItem"
+            },
+            "type": "array",
+            "title": "Exports"
+          },
+          "blind_spot_reports": {
+            "items": {
+              "$ref": "#/components/schemas/ReportBlindSpotItem"
+            },
+            "type": "array",
+            "title": "Blind Spot Reports"
+          }
+        },
+        "type": "object",
+        "required": [
+          "exports",
+          "blind_spot_reports"
+        ],
+        "title": "ReportsOut",
+        "description": "Advisor-ready outputs across the caller's households (newest first)."
+      },
+      "ReviewItem": {
+        "properties": {
+          "constraint": {
+            "$ref": "#/components/schemas/ConstraintOut"
+          },
+          "owner_type": {
+            "type": "string",
+            "enum": [
+              "household",
+              "fund"
+            ],
+            "title": "Owner Type"
+          },
+          "owner_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Owner Id"
+          },
+          "owner_name": {
+            "type": "string",
+            "title": "Owner Name"
+          }
+        },
+        "type": "object",
+        "required": [
+          "constraint",
+          "owner_type",
+          "owner_id",
+          "owner_name"
+        ],
+        "title": "ReviewItem",
+        "description": "A term awaiting review that the caller is allowed to decide (household editor or library reviewer)."
+      },
+      "ReviewQueueOut": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReviewItem"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "total": {
+            "type": "integer",
+            "title": "Total"
+          },
+          "household_items": {
+            "type": "integer",
+            "title": "Household Items"
+          },
+          "library_items": {
+            "type": "integer",
+            "title": "Library Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "total",
+          "household_items",
+          "library_items"
+        ],
+        "title": "ReviewQueueOut"
+      },
       "RevisionOut": {
         "properties": {
           "revision": {
@@ -6697,6 +10424,12 @@
             "type": "string",
             "format": "date-time",
             "title": "Created At"
+          },
+          "explanation": {
+            "additionalProperties": true,
+            "type": "object",
+            "title": "Explanation",
+            "default": {}
           },
           "inputs_snapshot": {
             "additionalProperties": true,
@@ -7022,6 +10755,19 @@
             "type": "object",
             "title": "Assumption Sources",
             "description": "Optional citation per assumption key; unsourced if absent"
+          },
+          "as_of_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of Date",
+            "description": "Date of projection month 1, used to select library terms in force (default: run date)"
           }
         },
         "additionalProperties": false,
@@ -7078,6 +10824,88 @@
           "name"
         ],
         "title": "ScenarioIn"
+      },
+      "ScenarioListItem": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Id"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "household_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Household Id"
+          },
+          "household_name": {
+            "type": "string",
+            "title": "Household Name"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Updated At"
+          },
+          "latest_run_id": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "uuid"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Run Id"
+          },
+          "latest_run_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Run At"
+          },
+          "latest_first_shortfall_month": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest First Shortfall Month"
+          },
+          "latest_peak_shortfall": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Latest Peak Shortfall"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "household_id",
+          "household_name",
+          "updated_at"
+        ],
+        "title": "ScenarioListItem"
       },
       "ScenarioOut": {
         "properties": {
@@ -7174,6 +11002,43 @@
         },
         "type": "object",
         "title": "ScenarioUpdate"
+      },
+      "ServerFallback": {
+        "properties": {
+          "configured": {
+            "type": "boolean",
+            "title": "Configured"
+          },
+          "provider": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Provider"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          }
+        },
+        "type": "object",
+        "required": [
+          "configured",
+          "provider",
+          "model"
+        ],
+        "title": "ServerFallback"
       },
       "SignedUrlOut": {
         "properties": {
@@ -7355,6 +11220,24 @@
           "source_backed": {
             "type": "boolean",
             "title": "Source Backed"
+          },
+          "basis": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "contract_clause",
+                  "derived_from_clause",
+                  "default_assumption",
+                  "household_record",
+                  "other"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Basis"
           }
         },
         "type": "object",
@@ -7365,6 +11248,33 @@
           "source_backed"
         ],
         "title": "TermProvenance"
+      },
+      "TestOut": {
+        "properties": {
+          "ok": {
+            "type": "boolean",
+            "title": "Ok"
+          },
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          },
+          "credential": {
+            "$ref": "#/components/schemas/CredentialOut"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ok",
+          "code",
+          "message",
+          "credential"
+        ],
+        "title": "TestOut"
       },
       "UploadTarget": {
         "properties": {
