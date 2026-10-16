@@ -75,12 +75,29 @@ inputs it changes. Every variant is simulated with the contract-aware model and 
 This is deterministic what-if analysis under stated assumptions. It does not estimate probabilities, is not a
 forecast and does not guarantee outcomes.
 
+## Sharing from households
+
+When a household document finishes processing, and the same file (same SHA-256) has now been uploaded to at
+least two households of the firm (`MIN_HOUSEHOLDS` in `backend/app/services/library_sharing.py`), it is copied
+into the firm's library once. Later uploads of that file are not copied again.
+
+- Only public offering categories (prospectus, supplement, SAI, interval fund, other fund document) are
+  eligible. Private agreements (credit lines, RSU grants, LPAs) are never shared, however often they repeat.
+- Household documents, terms and approvals are not modified. The library copy's terms start as
+  `needs_review` (household approvals are not library approvals); the fund gets a provisional name
+  ("<file name> (confirm name)") with `metadata_status = needs_review`.
+- Holdings are not linked automatically.
+- Demo fixtures are included, so two demo households share the synthetic interval fund policy; the copy keeps
+  `is_demo_fixture`.
+- Sharing runs after the household document is saved; if it fails, the failure is logged and the household
+  document stays processed.
+
 ## Backfill
 
-`backend/scripts/backfill_fund_library.py` copies household-uploaded public offering documents into their
-firm's library (dry run by default; `--apply` to write; `--include-demo` for synthetic fixtures). It never
-deletes or modifies household records. Copied terms start as `needs_review`, funds get a provisional name with
-`metadata_status = needs_review`, and holdings are listed as link candidates but not linked.
+`backend/scripts/backfill_fund_library.py` applies the same copy to documents uploaded earlier (dry run by
+default; `--apply` to write; `--include-demo` for synthetic fixtures; `--min-households N` to copy only files
+in at least N households, default 1). It never deletes or modifies household records, and holdings are listed
+as link candidates but not linked.
 
 ## Migrations
 

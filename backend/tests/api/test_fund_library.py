@@ -336,36 +336,70 @@ def _load_backfill():
     return mod
 
 
+def test_same_file_in_two_households_is_shared_to_library(alice):
+    from .conftest import upload
+    hids = [household_with_reit(alice, None, n) for n in ("A", "B", "C")]
+    src = upload(alice, hids[0], PROSPECTUS, filename="Example-REIT-Prospectus.pdf", category="prospectus")[0]
+    assert alice.get("/funds").json()["total"] == 0  # one household is not yet shared
+    first = alice.get(f"/households/{hids[0]}/constraints").json()
+    approve(alice, next(c for c in first if c["constraint_type"] == "redemption_monthly_cap"))
+    before = alice.get(f"/households/{hids[0]}/constraints").json()
+
+    upload(alice, hids[1], PROSPECTUS, filename="Example-REIT-Prospectus.pdf", category="prospectus")
+    funds = alice.get("/funds").json()["items"]
+    assert len(funds) == 1 and funds[0]["metadata_status"] == "needs_review" and funds[0]["fund_type"] == "non_traded_reit"
+    assert funds[0]["name"] == "Example REIT Prospectus (confirm name)"
+    lib = alice.get(f"/funds/{funds[0]['id']}/documents").json()
+    assert len(lib) == 1 and lib[0]["sha256"] == src["sha256"]
+    lib_terms = terms(alice, funds[0]["id"])["terms"]
+    assert lib_terms and all(t["review_status"] == "needs_review" for t in lib_terms)
+    detail = alice.get(f"/constraints/{lib_terms[0]['id']}").json()
+    assert "Shared from household document" in detail["revisions"][0]["note"]
+    assert alice.get(f"/documents/{lib[0]['id']}/download").status_code == 200
+    # Originals and their approvals unchanged, holdings not linked automatically.
+    assert alice.get(f"/households/{hids[0]}/constraints").json() == before
+    assert all(a["fund_id"] is None for h in hids for a in alice.get(f"/households/{h}/assets").json())
+
+    upload(alice, hids[2], PROSPECTUS, filename="Example-REIT-Prospectus.pdf", category="prospectus")
+    assert alice.get("/funds").json()["total"] == 1  # identical files stored once per firm
+    assert len(alice.get(f"/funds/{funds[0]['id']}/documents").json()) == 1
+
+
+def test_repeated_demo_households_share_only_public_fund_documents(alice):
+    for _ in range(2):
+        assert alice.post("/households/demo").status_code == 201
+    funds = alice.get("/funds").json()["items"]
+    # Of the four synthetic contracts only the interval fund policy is a public offering document; the LPA,
+    # credit line and RSU agreements stay in their households.
+    assert [(f["name"], f["fund_type"]) for f in funds] == [
+        ("SYNTHETIC Interval Fund Repurchase Policy (confirm name)", "interval_fund")]
+    lib = alice.get(f"/funds/{funds[0]['id']}/documents").json()
+    assert len(lib) == 1 and lib[0]["is_demo_fixture"] is True
+
+
 def test_backfill_copies_without_touching_household_records(alice, db):
     from .conftest import upload
     backfill = _load_backfill().backfill
-    hids = [household_with_reit(alice, None, n) for n in ("A", "B")]
-    src = [upload(alice, h, PROSPECTUS, filename="Example-REIT-Prospectus.pdf", category="prospectus")[0]
-           for h in hids]
-    first = alice.get(f"/households/{hids[0]}/constraints").json()
-    approve(alice, next(c for c in first if c["constraint_type"] == "redemption_monthly_cap"))
-    before = {h: alice.get(f"/households/{h}/constraints").json() for h in hids}
+    hid = household_with_reit(alice, None, "A")
+    src = upload(alice, hid, PROSPECTUS, filename="Example-REIT-Prospectus.pdf", category="prospectus")[0]
+    before = alice.get(f"/households/{hid}/constraints").json()
 
+    assert backfill(db, apply=False, include_demo=False, min_households=2) == []
     plan = backfill(db, apply=False, include_demo=False)
     db.rollback()
-    assert plan[0].startswith("PLAN") and "2 household(s)" in plan[0]
-    assert sum("candidate holding" in line for line in plan) == 2
+    assert plan[0].startswith("PLAN") and "1 household(s)" in plan[0]
+    assert sum("candidate holding" in line for line in plan) == 1
     assert alice.get("/funds").json()["total"] == 0  # dry run wrote nothing
 
     done = backfill(db, apply=True, include_demo=False)
     assert done[0].startswith("COPY")
     funds = alice.get("/funds").json()["items"]
-    assert len(funds) == 1 and funds[0]["metadata_status"] == "needs_review" and funds[0]["fund_type"] == "non_traded_reit"
+    assert len(funds) == 1 and funds[0]["fund_type"] == "non_traded_reit"
     lib = alice.get(f"/funds/{funds[0]['id']}/documents").json()
-    assert len(lib) == 1 and lib[0]["sha256"] == src[0]["sha256"]  # identical files stored once per firm
-    lib_terms = terms(alice, funds[0]["id"])["terms"]
-    assert lib_terms and all(t["review_status"] == "needs_review" for t in lib_terms)
-    detail = alice.get(f"/constraints/{lib_terms[0]['id']}").json()
+    assert len(lib) == 1 and lib[0]["sha256"] == src["sha256"]
+    detail = alice.get(f"/constraints/{terms(alice, funds[0]['id'])['terms'][0]['id']}").json()
     assert "Backfilled from household document" in detail["revisions"][0]["note"]
-    assert alice.get(f"/documents/{lib[0]['id']}/download").status_code == 200
-    # Originals unchanged, holdings not linked automatically.
-    assert {h: alice.get(f"/households/{h}/constraints").json() for h in hids} == before
-    assert all(a["fund_id"] is None for h in hids for a in alice.get(f"/households/{h}/assets").json())
+    assert alice.get(f"/households/{hid}/constraints").json() == before
 
     again = backfill(db, apply=True, include_demo=False)
     assert again[0].startswith("SKIP") and alice.get("/funds").json()["total"] == 1

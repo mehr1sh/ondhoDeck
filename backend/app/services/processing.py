@@ -27,6 +27,7 @@ from ..engine.schemas import ContractConstraint, ExtractionMethod
 from ..llm import LLMProvider, ProviderError, TransientProviderError, build_provider, get_provider
 from ..models import Document, DocumentPage, ExtractedConstraint, ProcessingJob, ProviderCredential
 from ..storage import Storage, StorageError, get_storage
+from .library_sharing import share_if_repeated
 from .ocr import ocr_pages
 
 log = logging.getLogger("slipslopes.processing")
@@ -269,7 +270,6 @@ def process_job(job_id: uuid.UUID, **kwargs) -> str:
         return "skipped"
     try:
         run_pipeline(job_id, **kwargs)
-        return "succeeded"
     except TransientJobError as exc:
         if requeue_for_retry(job_id, str(exc)):
             return "retry"
@@ -285,3 +285,17 @@ def process_job(job_id: uuid.UUID, **kwargs) -> str:
         log.exception("unexpected processing error job_id=%s", job_id)
         mark_failed(job_id, "internal_error", "An unexpected error occurred while processing the document.")
         return "failed"
+    _share_with_library(job_id, kwargs.get("storage"))
+    return "succeeded"
+
+
+def _share_with_library(job_id: uuid.UUID, storage: Storage | None) -> None:
+    """Best effort: the household document is already processed, so a failed library copy is only logged."""
+    try:
+        with session_scope() as db:
+            job = db.get(ProcessingJob, job_id)
+            document_id = job.document_id if job else None
+        if document_id is not None:
+            share_if_repeated(document_id, storage)
+    except Exception:
+        log.exception("fund library sharing failed job_id=%s", job_id)
