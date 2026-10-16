@@ -8,7 +8,7 @@ from pathlib import Path
 
 import httpx
 from fastapi import APIRouter, Depends, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -36,6 +36,7 @@ from ..models import (
     Asset,
     AuditEvent,
     CashFlow,
+    ChatConversation,
     Document,
     ExtractedConstraint,
     FirmMember,
@@ -110,6 +111,8 @@ def delete_account(body: AccountDelete, user: CurrentUser = Depends(get_current_
     from ..services.documents import purge_household_files
 
     storage = get_storage()
+    # Conversations are private to their author; delete them even if the profile row is kept (anonymised) below.
+    db.execute(delete(ChatConversation).where(ChatConversation.user_id == user.id))
     memberships = db.scalars(select(HouseholdMember).where(HouseholdMember.user_id == user.id)).all()
     deleted_households = 0
     for m in memberships:

@@ -69,6 +69,7 @@ All ids are UUIDs. Timestamps are `timestamptz`. Money is `numeric(18,2)` with a
 | `stress_results` | Search parameters and grid, boundary, first failure, attribution, key events | — |
 | `prevention_plans` / `prevention_recommendations` | Costs, verification, ranked single and combined actions, approval status | unique (plan, kind, rank) |
 | `exports` | Requested exports, status, storage path | kind/status enums |
+| `chat_conversations`, `chat_messages` | Assistant conversations (author, optional household) and their messages with provider, model and token usage | role enum; RLS on, no browser grants |
 | `audit_events` | Append-only record of changes (ids, field names, statuses only) | indexed by household, time |
 
 Migrations: `backend/alembic/versions/` (initial schema, row-level security).

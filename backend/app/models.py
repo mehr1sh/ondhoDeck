@@ -695,3 +695,40 @@ class AuditEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     __table_args__ = (Index("ix_audit_events_household_created", "household_id", "created_at"),
                       Index("ix_audit_events_fund_created", "fund_id", "created_at"))
+
+
+# ----------------------------------------------------------------------------- assistant chat
+
+CHAT_ROLES = ("user", "assistant")
+
+
+class ChatConversation(TimestampMixin, Base):
+    """An advisor's assistant conversation, about one household or general (household_id NULL).
+    Private to its author: other household members cannot read it. Answered with the author's own AI key."""
+    __tablename__ = "chat_conversations"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="CASCADE"),
+                                               nullable=False)
+    household_id: Mapped[Optional[uuid.UUID]] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("households.id", ondelete="CASCADE"))
+    title: Mapped[str] = mapped_column(String(120), nullable=False)
+    messages: Mapped[list[ChatMessage]] = relationship(cascade="all, delete-orphan", passive_deletes=True,
+                                                       order_by="ChatMessage.created_at")
+    __table_args__ = (Index("ix_chat_conversations_user_household", "user_id", "household_id", "updated_at"),)
+
+
+class ChatMessage(Base):
+    __tablename__ = "chat_messages"
+    id: Mapped[uuid.UUID] = uuid_pk()
+    conversation_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("chat_conversations.id", ondelete="CASCADE"), nullable=False, index=True)
+    role: Mapped[str] = mapped_column(String(16), nullable=False)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Assistant replies: which provider and model answered, token usage, and whether the reply hit the length cap.
+    provider: Mapped[Optional[str]] = mapped_column(String(16))
+    model: Mapped[Optional[str]] = mapped_column(String(120))
+    input_tokens: Mapped[Optional[int]] = mapped_column(Integer)
+    output_tokens: Mapped[Optional[int]] = mapped_column(Integer)
+    truncated: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    __table_args__ = (_enum_check("role", CHAT_ROLES, "ck_chat_messages_role"),)

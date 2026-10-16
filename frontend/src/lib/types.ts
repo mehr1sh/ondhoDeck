@@ -1181,3 +1181,38 @@ export interface RunConstraintVersion {
   effective_from?: ISODate | null;
   effective_to?: ISODate | null;
 }
+
+// ----------------------------------------------------------------------------- assistant chat
+
+/** A saved assistant conversation, private to its author. `household_id` null = general conversation. */
+export interface ChatOut {
+  id: UUID;
+  household_id: UUID | null;
+  title: string;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+}
+
+export interface ChatMessageOut {
+  id: UUID;
+  role: "user" | "assistant";
+  content: string;
+  provider: string | null;
+  model: string | null;
+  input_tokens: number | null;
+  output_tokens: number | null;
+  /** The reply stopped at the provider's length limit. */
+  truncated: boolean;
+  created_at: ISODateTime;
+}
+
+export interface ChatDetailOut extends ChatOut {
+  messages: ChatMessageOut[];
+}
+
+/** Final server-sent event of a reply: both messages as saved. */
+export interface ChatDoneEvent {
+  user_message: ChatMessageOut;
+  assistant_message: ChatMessageOut;
+  title: string;
+}

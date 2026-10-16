@@ -1,8 +1,10 @@
 /** Typed wrappers for every /api/v1 endpoint used by the frontend. */
-import { api, apiRequest, newIdempotencyKey } from "@/lib/api";
+import { api, apiRequest, newIdempotencyKey, streamChatReply } from "@/lib/api";
 import type {
   AIProvider,
   AIProvidersOut,
+  ChatDetailOut,
+  ChatOut,
   ApplyOut,
   AssetIn,
   AssetOut,
@@ -223,6 +225,16 @@ export const endpoints = {
   reviewQueue: (limit?: number) => api.get<ReviewQueueOut>("/me/review-queue", { limit }),
   myScenarios: () => api.get<ScenarioListItem[]>("/me/scenarios"),
   myReports: (limit?: number) => api.get<ReportsOut>("/me/reports", { limit }),
+
+  // assistant (answers with the user's own AI provider key)
+  listChats: (householdId?: string | null) =>
+    api.get<ChatOut[]>("/chats", { household_id: householdId ?? undefined }),
+  createChat: (householdId?: string | null) => api.post<ChatOut>("/chats", { household_id: householdId ?? null }),
+  getChat: (id: string) => api.get<ChatDetailOut>(`/chats/${id}`),
+  deleteChat: (id: string) => api.del(`/chats/${id}`),
+  /** Streams the reply: `onDelta` gets text as it arrives; resolves with both saved messages. */
+  sendChatMessage: (id: string, content: string, onDelta: (text: string) => void, signal?: AbortSignal) =>
+    streamChatReply(`/chats/${id}/messages`, { content }, onDelta, signal),
 
   // firms
   myFirms: () => api.get<FirmOut[]>("/me/firms"),

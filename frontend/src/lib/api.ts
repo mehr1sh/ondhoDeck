@@ -8,6 +8,7 @@
 import { getPublicEnv } from "@/lib/env";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 import { loginUrlFor } from "@/lib/authGuard";
+import type { ChatDoneEvent } from "@/lib/types";
 
 export const API_PREFIX = "/api/v1";
 
@@ -249,6 +250,73 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
       message: "The API returned a response that could not be read.",
       requestId: res.headers.get("X-Request-ID"),
     });
+  }
+}
+
+/**
+ * POSTs to an assistant endpoint and reads its server-sent events: `delta` text goes to `onDelta`, `done`
+ * resolves with both saved messages, and `error` rejects with an ApiError. Errors before the stream starts
+ * (missing provider key, validation, rate limit, 401) are handled exactly like apiRequest.
+ */
+export async function streamChatReply(
+  path: string,
+  body: unknown,
+  onDelta: (text: string) => void,
+  signal?: AbortSignal,
+): Promise<ChatDoneEvent> {
+  const headers: Record<string, string> = { Accept: "text/event-stream", "Content-Type": "application/json" };
+  const token = await getAccessToken();
+  if (token) headers.Authorization = `Bearer ${token}`;
+  let res: Response;
+  try {
+    res = await fetch(buildUrl(path), { method: "POST", headers, body: JSON.stringify(body), signal });
+  } catch (e) {
+    if (e instanceof DOMException && e.name === "AbortError") throw e;
+    throw new ApiError({
+      status: 0,
+      code: "network_error",
+      message: "Could not reach the OndhoDeck API. Check your connection and try again.",
+    });
+  }
+  if (!res.ok) {
+    const err = await parseError(res);
+    if (err.status === 401) void handleSessionExpired();
+    throw err;
+  }
+  const requestId = res.headers.get("X-Request-ID");
+  const broken = () =>
+    new ApiError({ status: 502, code: "stream_interrupted", message: "The reply was interrupted. Try again.", requestId });
+  if (!res.body) throw broken();
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  for (;;) {
+    const { value, done } = await reader.read();
+    buffer += decoder.decode(value, { stream: !done });
+    let cut: number;
+    while ((cut = buffer.indexOf("\n\n")) >= 0) {
+      const block = buffer.slice(0, cut);
+      buffer = buffer.slice(cut + 2);
+      let event = "message";
+      const data: string[] = [];
+      for (const line of block.split("\n")) {
+        if (line.startsWith("event: ")) event = line.slice(7);
+        else if (line.startsWith("data: ")) data.push(line.slice(6));
+      }
+      const payload = data.length ? (JSON.parse(data.join("\n")) as Record<string, unknown>) : {};
+      if (event === "delta") onDelta(String(payload.text ?? ""));
+      else if (event === "done") return payload as unknown as ChatDoneEvent;
+      else if (event === "error") {
+        throw new ApiError({
+          status: 502,
+          code: String(payload.code ?? "assistant_error"),
+          message: String(payload.message ?? "The assistant could not answer."),
+          requestId,
+        });
+      }
+    }
+    if (done) throw broken();
   }
 }
 

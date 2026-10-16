@@ -1,12 +1,22 @@
-"""Anthropic Messages API adapter (schema-constrained JSON via output_config.format)."""
+"""Anthropic Messages API adapter (schema-constrained JSON via output_config.format; streamed chat)."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-from .base import ConnectionResult, ProviderError, Timer, TransientProviderError, Usage, connection_failure
+from .base import (
+    ChatTurn,
+    ConnectionResult,
+    ProviderError,
+    Timer,
+    TransientProviderError,
+    Usage,
+    connection_failure,
+)
 
 WORKSPACE_HEADER = "anthropic-workspace-id"
+CHAT_MAX_TOKENS = 64000  # a ceiling, not a target; streaming avoids HTTP timeouts at this size
 
 
 def _provider_message(exc: Exception, secret: str) -> str:
@@ -60,6 +70,13 @@ class AnthropicProvider:
     name: str = "anthropic"
     last_usage: Usage = field(default_factory=Usage)
     last_latency_ms: int = 0
+    last_truncated: bool = False
+
+    def _fallback_kwargs(self) -> dict:
+        if not self.fallbacks:
+            return {}
+        return {"extra_headers": {"anthropic-beta": "server-side-fallback-2026-07-01"},
+                "extra_body": {"fallbacks": "default"}}
 
     def _client(self, timeout: float | None = None):
         import anthropic
@@ -73,10 +90,8 @@ class AnthropicProvider:
         # {"type": "disabled"} or a token budget is rejected with a 400. Depth is set via output_config.effort.
         kwargs: dict = dict(model=self.model, max_tokens=16000, system=system,
                             messages=[{"role": "user", "content": user}],
-                            output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema}})
-        if self.fallbacks:
-            kwargs["extra_headers"] = {"anthropic-beta": "server-side-fallback-2026-07-01"}
-            kwargs["extra_body"] = {"fallbacks": "default"}
+                            output_config={"effort": self.effort, "format": {"type": "json_schema", "schema": schema}},
+                            **self._fallback_kwargs())
         timer = Timer()
         try:
             response = self._client().messages.create(**kwargs)
@@ -97,6 +112,30 @@ class AnthropicProvider:
         except json.JSONDecodeError:
             from ..engine.llm_service import LLMError
             raise LLMError("Model returned malformed JSON") from None
+
+    def stream_chat(self, system: str, turns: list[ChatTurn]) -> Iterator[str]:
+        # History is replayed as plain text only. Earlier turns' thinking blocks are never sent back, so
+        # there is nothing for the API's conversation check on thinking blocks to reject.
+        # A refusal mid-stream with fallbacks keeps the partial text and the fallback model continues on the
+        # same stream, so the concatenated deltas are one reply; only a final `refusal` discards it.
+        kwargs: dict = dict(model=self.model, max_tokens=CHAT_MAX_TOKENS, system=system,
+                            messages=[{"role": t.role, "content": t.content} for t in turns],
+                            output_config={"effort": self.effort}, cache_control={"type": "ephemeral"},
+                            **self._fallback_kwargs())
+        timer = Timer()
+        self.last_truncated = False
+        try:
+            with self._client().messages.stream(**kwargs) as stream:
+                yield from stream.text_stream
+                response = stream.get_final_message()
+        except Exception as exc:  # mapped to our own messages; the original is never shown
+            raise _map_error(exc, self.api_key) from None
+        self.last_latency_ms = timer.ms()
+        usage = getattr(response, "usage", None)
+        self.last_usage = Usage(getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
+        if response.stop_reason == "refusal":
+            raise ProviderError("The model declined to answer this message.", "refusal")
+        self.last_truncated = response.stop_reason == "max_tokens"
 
     def test_connection(self) -> ConnectionResult:
         """Retrieve the selected model's metadata: authenticates the key without generating tokens."""

@@ -74,7 +74,7 @@ def migrated_db():
 
 @pytest.fixture(autouse=True)
 def clean_db():
-    tables = ["provider_credentials", "audit_events", "exports", "prevention_recommendations", "prevention_plans", "stress_results",
+    tables = ["chat_messages", "chat_conversations", "provider_credentials", "audit_events", "exports", "prevention_recommendations", "prevention_plans", "stress_results",
               "simulation_months", "simulation_runs", "scenarios", "constraint_revisions", "extracted_constraints",
               "processing_jobs", "document_pages", "documents", "scheduled_events", "cash_flows", "liabilities",
               "blind_spot_reports", "assets", "household_members", "households", "funds", "firm_members", "firms", "profiles"]

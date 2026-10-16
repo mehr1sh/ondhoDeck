@@ -1,10 +1,22 @@
-"""OpenAI Responses API adapter (strict JSON-schema structured output via text.format)."""
+"""OpenAI Responses API adapter (strict JSON-schema structured output via text.format; streamed chat)."""
 from __future__ import annotations
 
 import json
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 
-from .base import ConnectionResult, ProviderError, Timer, TransientProviderError, Usage, connection_failure, schema_name
+from .base import (
+    ChatTurn,
+    ConnectionResult,
+    ProviderError,
+    Timer,
+    TransientProviderError,
+    Usage,
+    connection_failure,
+    schema_name,
+)
+
+CHAT_MAX_OUTPUT_TOKENS = 16000
 
 
 def _error_code(exc: Exception) -> str:
@@ -49,6 +61,7 @@ class OpenAIProvider:
     name: str = "openai"
     last_usage: Usage = field(default_factory=Usage)
     last_latency_ms: int = 0
+    last_truncated: bool = False
 
     def _client(self, timeout: float | None = None):
         import openai
@@ -83,6 +96,44 @@ class OpenAIProvider:
         except json.JSONDecodeError:
             from ..engine.llm_service import LLMError
             raise LLMError("Model returned malformed JSON") from None
+
+    def stream_chat(self, system: str, turns: list[ChatTurn]) -> Iterator[str]:
+        timer = Timer()
+        self.last_truncated = False
+        response = None
+        refused = False
+        try:
+            with self._client().responses.create(
+                model=self.model, instructions=system, store=False, max_output_tokens=CHAT_MAX_OUTPUT_TOKENS,
+                input=[{"role": t.role, "content": t.content} for t in turns], stream=True,
+            ) as stream:
+                for event in stream:
+                    if event.type == "response.output_text.delta":
+                        yield event.delta
+                    elif event.type == "response.refusal.delta":
+                        refused = True
+                    elif event.type in ("response.completed", "response.incomplete", "response.failed"):
+                        response = event.response
+                    elif event.type == "error":
+                        raise TransientProviderError("OpenAI reported an error while answering.",
+                                                     "provider_unavailable")
+        except ProviderError:
+            raise
+        except Exception as exc:
+            raise _map_error(exc) from None
+        self.last_latency_ms = timer.ms()
+        usage = getattr(response, "usage", None)
+        self.last_usage = Usage(getattr(usage, "input_tokens", 0) or 0, getattr(usage, "output_tokens", 0) or 0)
+        if refused:
+            raise ProviderError("The model declined to answer this message.", "refusal")
+        status = getattr(response, "status", None)
+        if response is None or status == "failed":
+            raise TransientProviderError("OpenAI reported a failed response.", "provider_unavailable")
+        if status == "incomplete":
+            reason = getattr(getattr(response, "incomplete_details", None), "reason", None)
+            if reason == "content_filter":
+                raise ProviderError("The model declined to answer this message.", "refusal")
+            self.last_truncated = True
 
     def test_connection(self) -> ConnectionResult:
         """Retrieve the selected model (or list models): authenticates the key without generating tokens."""

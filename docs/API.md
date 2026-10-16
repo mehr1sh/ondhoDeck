@@ -70,6 +70,9 @@ Base path: `/api/v1`. Interactive OpenAPI docs are served by the API at `/docs` 
 | GET / POST | `/households/{hid}/exports` | List / request export (`constraints_csv`, `constraints_json`, `simulation_csv`, `results_json`, `report_pdf`) |
 | GET | `/exports/{id}` · `/exports/{id}/download` | Status / signed download URL |
 | GET | `/households/{hid}/audit-events` | Audit trail (paginated) |
+| GET / POST | `/chats` | List the caller's assistant conversations (`?household_id=`; omit for general ones) / start one (`{"household_id": null|uuid}`) |
+| GET / PATCH / DELETE | `/chats/{id}` | Conversation with messages / rename / delete (author only) |
+| POST | `/chats/{id}/messages` | `{"content"}`; streams the reply as server-sent events: `delta` `{text}`, then `done` `{user_message, assistant_message, title}` or `error` `{code, message}`. Uses the caller's active AI provider key (409 `ai_provider_required` without one) |
 
 ## Document lifecycle
 

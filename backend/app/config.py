@@ -63,6 +63,7 @@ class Settings(BaseSettings):
     cors_origins: str = "http://localhost:3000"
     rate_limit_extraction_per_hour: int = 30
     rate_limit_compute_per_minute: int = 20
+    rate_limit_chat_per_minute: int = 10
 
     # Retention: deleted documents' stored objects and page text are purged immediately;
     # the document row is kept (status=deleted, no content) for audit.
