@@ -4,7 +4,7 @@ __pycache__/
 *.pyc
 .pytest_cache/
 .streamlit/secrets.toml
-exports/
+/exports/
 
 # Locally supplied source documents (third-party or personal) are not redistributed.
 # Extraction snapshots in backend/app/engine/fixtures/snapshots/ are tracked so the demo runs without them.

@@ -24,13 +24,12 @@ import {
   useSortedRows,
 } from "@/components/ui";
 import { ExportStatusBadge } from "@/components/badges";
-import { useToast } from "@/components/Toast";
-import { resolveApiUrl } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { EXPORT_KIND_LABELS, exportKindLabel } from "@/lib/exportKinds";
 import { formatBytes, formatDate, formatDateTime } from "@/lib/format";
-import { describeError, useApiQuery, usePolling } from "@/lib/hooks";
+import { useApiQuery, usePolling } from "@/lib/hooks";
 import type { ReportBlindSpotItem, ReportExportItem } from "@/lib/types";
+import { useExportDownload } from "./useExportDownload";
 
 const LIMIT = 200;
 
@@ -62,9 +61,8 @@ function HowTo() {
 }
 
 export function ReportsView() {
-  const toast = useToast();
   const q = useApiQuery(() => endpoints.myReports(LIMIT), []);
-  const [downloading, setDownloading] = useState<string | null>(null);
+  const { downloading, download } = useExportDownload();
   const [search, setSearch] = useState("");
   const [kind, setKind] = useState("");
 
@@ -100,19 +98,6 @@ export function ReportsView() {
   const exportedSpotIds = new Set(
     exportsAll.filter((e) => e.blind_spot_report_id && e.status !== "failed").map((e) => e.blind_spot_report_id),
   );
-
-  const download = async (id: string) => {
-    setDownloading(id);
-    try {
-      const signed = await endpoints.downloadExport(id);
-      window.open(resolveApiUrl(signed.url), "_blank", "noopener,noreferrer");
-    } catch (e) {
-      const d = describeError(e);
-      toast.error(d.message, d.requestId ? `Request ID: ${d.requestId}` : undefined);
-    } finally {
-      setDownloading(null);
-    }
-  };
 
   return (
     <div className="space-y-8">
