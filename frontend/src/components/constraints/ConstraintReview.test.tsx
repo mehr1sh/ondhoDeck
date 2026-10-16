@@ -101,7 +101,7 @@ describe("ConstraintReview", () => {
     render(<ConstraintReview constraintId="c1" householdId="h1" canEdit />);
     await screen.findByText(/will offer to repurchase 5%/);
     await user.click(screen.getByRole("button", { name: "Edit" }));
-    const value = screen.getByLabelText(/^Value/);
+    const value = screen.getByLabelText(/^Value$/);
     await user.clear(value);
     await user.type(value, "4.5");
     await user.type(screen.getByLabelText(/Review note/), "Corrected");
@@ -117,8 +117,48 @@ describe("ConstraintReview", () => {
     await screen.findByText(/will offer to repurchase 5%/);
     expect(screen.getAllByText("qualitative").length).toBeGreaterThan(0);
     await user.click(screen.getByRole("button", { name: "Edit" }));
-    expect(screen.queryByLabelText(/^Value/)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^Value$/)).not.toBeInTheDocument();
     expect(screen.getByText(/numeric values\s+cannot be added/)).toBeInTheDocument();
+  });
+
+  it("shows validation issues and ambiguity, and edits value kind, exceptions and discretion", async () => {
+    const { calls } = installFetch((c) => {
+      if (c.method === "GET")
+        return jsonResponse(
+          constraint(2, {
+            value_kind: "maximum",
+            ambiguous: true,
+            exceptions: ["death or disability"],
+            discretion: null,
+            effective_period: null,
+            validation_issues: [
+              { code: "value_not_in_quote", severity: "warning", message: "value=5 does not appear in the quoted clause." },
+            ],
+          }),
+        );
+      if (c.method === "PATCH") return jsonResponse(constraint(3, { review_status: "edited" }));
+      return undefined;
+    });
+    const user = userEvent.setup();
+    render(<ConstraintReview constraintId="c1" householdId="h1" canEdit />);
+    expect(await screen.findByText("Automated validation warnings")).toBeInTheDocument();
+    expect(screen.getByText(/does not appear in the quoted clause/)).toBeInTheDocument();
+    expect(screen.getByText("Ambiguous clause")).toBeInTheDocument();
+    expect(screen.getByText(/not a guaranteed payout/)).toBeInTheDocument();
+    expect(screen.getByText("death or disability")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Edit" }));
+    await user.selectOptions(screen.getByLabelText("Value kind"), "range");
+    await user.type(screen.getByLabelText("Exceptions"), "\nestate planning");
+    await user.type(screen.getByLabelText("Discretion"), "Board may suspend");
+    await user.click(screen.getByRole("button", { name: "Save edits" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "PATCH")).toBe(true));
+    expect(calls.find((c) => c.method === "PATCH")!.body).toEqual({
+      expected_revision: 2,
+      value_kind: "range",
+      exceptions: ["death or disability", "estate planning"],
+      discretion: "Board may suspend",
+    });
   });
 
   it("highlights the quote in the page text panel", async () => {

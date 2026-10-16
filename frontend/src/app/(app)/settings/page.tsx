@@ -24,6 +24,7 @@ import {
 } from "@/components/ui";
 import { DocumentStatusBadge } from "@/components/badges";
 import { useSession } from "@/components/AppShell";
+import { FirmSettings } from "@/components/firm/FirmSettings";
 import { useToast } from "@/components/Toast";
 import { ApiError } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
@@ -216,7 +217,7 @@ function DeleteAccount() {
   return (
     <>
       <p className="text-sm text-slate-700">
-        Permanently deletes your SlipSlopes account data, including uploaded files and their extracted text. This cannot be
+        Permanently deletes your OndhoDeck account data, including uploaded files and their extracted text. This cannot be
         undone.
       </p>
       <Button variant="danger" className="mt-3" onClick={() => setOpen(true)}>
@@ -275,6 +276,17 @@ export default function SettingsPage() {
       <PageHeader title="Settings" actions={<Button variant="secondary" onClick={signOut}>Sign out</Button>} />
       <Card title="Profile">
         <ProfileForm />
+      </Card>
+      <Card title="Firm">
+        <FirmSettings />
+      </Card>
+      <Card title="AI providers">
+        <p className="text-sm text-slate-700">
+          Add your own Anthropic or OpenAI API key for document extraction, test it and choose the model.
+        </p>
+        <Link href="/settings/ai-providers" className="mt-2 inline-block text-sm underline">
+          Manage AI provider keys
+        </Link>
       </Card>
       <Card title="My documents">
         <p className="mb-3 text-sm text-slate-600">All documents across your households.</p>

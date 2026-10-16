@@ -17,7 +17,7 @@ export default function ScenariosPage() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-base font-semibold text-slate-900">Scenarios</h2>
+          <h2 className="font-display text-[1.35rem] text-ink">Scenarios</h2>
           <p className="text-sm text-slate-600">
             A scenario is a set of market and behaviour assumptions. Run it to compare a naive liquidity view with the
             contract-aware view.

@@ -1,5 +1,5 @@
 /**
- * Central API client for the SlipSlopes API.
+ * Central API client for the OndhoDeck API.
  *
  * - Attaches `Authorization: Bearer <access token>` from the Supabase session.
  * - Parses the error envelope `{"error": {code, message, request_id, details?}}` into ApiError.
@@ -226,7 +226,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
     throw new ApiError({
       status: 0,
       code: "network_error",
-      message: "Could not reach the SlipSlopes API. Check your connection and try again.",
+      message: "Could not reach the OndhoDeck API. Check your connection and try again.",
     });
   }
 

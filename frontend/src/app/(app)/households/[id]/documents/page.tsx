@@ -20,6 +20,7 @@ import {
 import { DocumentStatusBadge } from "@/components/badges";
 import { DocumentUploader } from "@/components/documents/DocumentUploader";
 import { useHousehold } from "@/components/household/HouseholdContext";
+import { extractionMethodLabel } from "@/lib/extraction";
 import { endpoints } from "@/lib/endpoints";
 import { EMPTY, formatBytes, formatDateTime, humanize } from "@/lib/format";
 import { useApiQuery, usePolling } from "@/lib/hooks";
@@ -35,15 +36,23 @@ export default function DocumentsPage() {
   usePolling(() => void q.reload(), 4000, anyActive);
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-6">
+      <Notice title="Private agreements only">
+        Upload this household&apos;s own agreements here: securities-based line agreements, subscription agreements,
+        capital-call notices, RSU grants. Public offering documents (prospectuses, supplements, SAIs) belong in the{" "}
+        <Link href="/funds" className="font-medium underline">
+          Fund Library
+        </Link>
+        , where their terms are reviewed once and apply to every linked holding.
+      </Notice>
       {canEdit ? (
         <DocumentUploader householdId={household.id} onChanged={() => void q.reload()} />
       ) : (
         <Notice>You have view-only access; uploading is disabled.</Notice>
       )}
       <section aria-labelledby="library-title">
-        <h2 id="library-title" className="mb-2 text-base font-semibold text-slate-900">
-          Document library
+        <h2 id="library-title" className="font-display mb-3 border-b border-line pb-2 text-lg text-ink">
+          Household agreements
         </h2>
         {q.loading && !q.data ? (
           <LoadingBlock />
@@ -51,8 +60,8 @@ export default function DocumentsPage() {
           <ErrorState error={q.error} onRetry={() => void q.reload()} />
         ) : !q.data || q.data.items.length === 0 ? (
           <EmptyState title="No documents yet">
-            Upload fund prospectuses, LPAs, securities-backed line agreements or RSU grants to extract liquidity
-            constraints with cited evidence.
+            Upload this household&apos;s private agreements (for example a securities-based line agreement, LPA or RSU
+            grant) above to extract liquidity terms with cited evidence.
           </EmptyState>
         ) : (
           <>
@@ -65,6 +74,7 @@ export default function DocumentsPage() {
                     <th className={th}>Status</th>
                     <th className={thNum}>Pages</th>
                     <th className={thNum}>Constraints</th>
+                    <th className={th}>Extraction method</th>
                     <th className={thNum}>Size</th>
                     <th className={th}>Uploaded</th>
                   </tr>
@@ -84,9 +94,18 @@ export default function DocumentsPage() {
                         {d.latest_job && ACTIVE_DOC_STATUSES.has(d.status) && (
                           <span className="ml-1 text-xs text-slate-600 tabular-nums">{d.latest_job.progress}%</span>
                         )}
+                        {d.status === "failed" && (
+                          <span className="mt-1 block max-w-xs text-xs text-risk">
+                            {d.error_message || "Processing failed."}{" "}
+                            <Link href={`/households/${household.id}/documents/${d.id}`} className="underline">
+                              Open to retry
+                            </Link>
+                          </span>
+                        )}
                       </td>
                       <td className={tdNum}>{d.page_count ?? EMPTY}</td>
                       <td className={tdNum}>{d.constraint_count ?? 0}</td>
+                      <td className={td}>{d.latest_job ? (extractionMethodLabel(d.latest_job) ?? EMPTY) : EMPTY}</td>
                       <td className={tdNum}>{formatBytes(d.size_bytes)}</td>
                       <td className={td}>{formatDateTime(d.created_at)}</td>
                     </tr>

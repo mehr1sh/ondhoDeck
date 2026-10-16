@@ -7,7 +7,7 @@
  */
 import type { AssumptionField } from "@/lib/types";
 
-export const SPECIAL_KEYS = new Set(["fx_rates", "assumption_sources"]);
+export const SPECIAL_KEYS = new Set(["fx_rates", "assumption_sources", "as_of_date"]);
 
 export function isFractionPercent(field: Pick<AssumptionField, "key" | "kind">): boolean {
   return field.kind === "percent" && !field.key.endsWith("_pct");

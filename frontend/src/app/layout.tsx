@@ -5,14 +5,14 @@ import { ToastProvider } from "@/components/Toast";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: { default: "SlipSlopes", template: "%s · SlipSlopes" },
-  description: "SlipSlopes — Contractual Liquidity Intelligence",
+  title: { default: "OndhoDeck", template: "%s · OndhoDeck" },
+  description: "OndhoDeck — contract-aware liquidity analysis for financial advisors",
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#1e293b",
+  themeColor: "#2f6b4f",
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {

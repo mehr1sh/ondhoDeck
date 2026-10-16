@@ -1,5 +1,5 @@
 /**
- * TypeScript mirror of the SlipSlopes API models (backend/app/api_schemas.py).
+ * TypeScript mirror of the OndhoDeck API models (backend/app/api_schemas.py).
  *
  * Conventions:
  *  - UUIDs and datetimes arrive as strings.
@@ -71,6 +71,7 @@ export interface HouseholdUpdate {
 
 export interface HouseholdOut {
   id: UUID;
+  firm_id?: UUID;
   name: string;
   reporting_currency: string;
   start_calendar_month: number;
@@ -144,6 +145,8 @@ export interface AssetIn {
   pledged_to_sbl?: boolean;
   unfunded_commitment?: DecimalInput | null;
   liquidity_notes?: string | null;
+  /** Library fund this holding is an instance of; null unlinks. */
+  fund_id?: UUID | null;
 }
 export type AssetUpdate = Partial<AssetIn>;
 
@@ -158,6 +161,8 @@ export interface AssetOut {
   pledged_to_sbl: boolean;
   unfunded_commitment: Decimal | null;
   liquidity_notes: string | null;
+  fund_id?: UUID | null;
+  fund_name?: string | null;
   updated_at: ISODateTime;
 }
 
@@ -231,6 +236,8 @@ export interface EventOut {
 
 export type DocCategory =
   | "prospectus"
+  | "prospectus_supplement"
+  | "statement_of_additional_information"
   | "interval_fund"
   | "private_fund_agreement"
   | "sbl_agreement"
@@ -265,6 +272,8 @@ export interface JobOut {
   extraction_method: string | null;
   provider: string | null;
   model: string | null;
+  /** Whose credentials ran the extraction: "user_byok" | "server" | "injected" | "none"; null for old jobs. */
+  credential_source?: string | null;
   error_code: string | null;
   error_message: string | null;
   stats: Record<string, unknown>;
@@ -284,7 +293,11 @@ export type DocumentStatus =
 
 export interface DocumentOut {
   id: UUID;
-  household_id: UUID;
+  /** Null for Fund Library documents. */
+  household_id: UUID | null;
+  fund_id?: UUID | null;
+  effective_date?: ISODate | null;
+  supersedes_document_id?: UUID | null;
   category: string;
   original_filename: string;
   content_type: string;
@@ -336,9 +349,22 @@ export interface PageOut {
 export type ReviewStatus = "needs_review" | "confirmed" | "edited" | "rejected";
 export const REVIEW_STATUSES: ReviewStatus[] = ["needs_review", "confirmed", "edited", "rejected"];
 
+/** How a clause's number should be read. A maximum is a cap the counterparty may fill less of. */
+export type ValueKind = "maximum" | "minimum" | "exact" | "range" | "qualitative";
+export const VALUE_KINDS: ValueKind[] = ["maximum", "minimum", "exact", "range", "qualitative"];
+
+export interface ValidationIssue {
+  code: string;
+  message: string;
+  /** "error" | "warning" (backend/app/engine/contract_validation.py) */
+  severity?: string;
+}
+
 export interface ConstraintOut {
   id: UUID;
-  household_id: UUID;
+  /** Null for Fund Library terms. */
+  household_id: UUID | null;
+  fund_id?: UUID | null;
   document_id: UUID;
   document_name: string;
   revision: number;
@@ -359,6 +385,13 @@ export interface ConstraintOut {
   quote_verified: boolean;
   corroborating_pages: number[];
   interpretation: string;
+  value_kind?: ValueKind | string | null;
+  exceptions?: string[];
+  discretion?: string | null;
+  effective_period?: string | null;
+  /** Discretion or conditions in the clause were not fully captured. */
+  ambiguous?: boolean;
+  validation_issues?: ValidationIssue[];
   confidence: string;
   /** source_backed | synthetic_document | user_confirmed | scenario_assumption */
   source_type: string;
@@ -367,7 +400,13 @@ export interface ConstraintOut {
   provider: string | null;
   model: string | null;
   is_qualitative: boolean;
+  reviewed_by?: UUID | null;
   reviewed_at: ISODateTime | null;
+  /** First date the term applies (inclusive); null = no start limit. */
+  effective_from?: ISODate | null;
+  /** Last date the term applies (inclusive); null = open-ended. */
+  effective_to?: ISODate | null;
+  superseded_by_id?: UUID | null;
   updated_at: ISODateTime;
 }
 
@@ -380,7 +419,21 @@ export interface ConstraintUpdate {
   timing?: string | null;
   conditions?: string | null;
   interpretation?: string | null;
+  value_kind?: ValueKind | null;
+  exceptions?: string[] | null;
+  discretion?: string | null;
+  effective_period?: string | null;
+  effective_from?: ISODate | null;
+  effective_to?: ISODate | null;
   review_status?: ReviewStatus | null;
+  note?: string | null;
+}
+
+export interface ConstraintSupersede {
+  expected_revision: number;
+  superseded_id: UUID;
+  superseded_expected_revision: number;
+  effective_date?: ISODate | null;
   note?: string | null;
 }
 
@@ -433,6 +486,8 @@ export interface ScenarioAssumptions {
   lever_discretionary_cut: number;
   lever_reit_prestress_request: number;
   assumption_sources: Record<string, string>;
+  /** Date of projection month 1; selects the library terms in force. Null = the run date. */
+  as_of_date?: ISODate | null;
 }
 
 export interface ScenarioIn {
@@ -472,6 +527,17 @@ export interface ScenarioDefaults {
   fields: AssumptionField[];
 }
 
+/** GET /scenario-presets item. `assumptions` is a complete assumption set (defaults + overrides). */
+export interface ScenarioPreset {
+  id: string;
+  name: string;
+  description: string;
+  /** e.g. "Scenario assumption - not a contract term or forecast" */
+  label: string;
+  overrides?: Partial<ScenarioAssumptions>;
+  assumptions: Partial<ScenarioAssumptions> & Record<string, unknown>;
+}
+
 // ----------------------------------------------------------------------------- runs
 
 export type ModelName = "naive" | "contract_aware";
@@ -489,6 +555,8 @@ export interface TermProvenance {
   value: unknown;
   provenance: string;
   source_backed: boolean;
+  /** contract_clause | derived_from_clause | default_assumption | household_record | other (absent on old runs). */
+  basis?: string | null;
 }
 
 export interface RunSummary {
@@ -528,7 +596,68 @@ export interface MonthOut {
   binding_constraints: string[];
 }
 
+export interface ExplanationEvidence {
+  id: UUID;
+  revision: number;
+  type: string;
+  asset_key: string;
+  document: string;
+  pdf_page: number;
+  quote: string;
+  value: unknown;
+}
+
+export interface ExplanationTerm {
+  term: string;
+  value: unknown;
+  provenance: string;
+}
+
+export interface ContributingRule {
+  rule: string;
+  relaxation: string;
+  peak_shortfall_reduction: number;
+  removes_shortfall: boolean;
+  first_shortfall_month_without_rule: number | null;
+  terms: ExplanationTerm[];
+  evidence: ExplanationEvidence[];
+  basis: string;
+}
+
+export interface AssumptionVariant {
+  direction: "lower" | "higher" | string;
+  value: number;
+  first_shortfall_month: number | null;
+  peak_shortfall: number;
+  material: boolean;
+}
+
+export interface MaterialAssumption {
+  assumption: string;
+  label: string;
+  base_value: number;
+  material: boolean;
+  variants: AssumptionVariant[];
+}
+
+/** Deterministic, counterfactual explanation of a run (no LLM). */
+export interface RunExplanation {
+  method: string;
+  first_shortfall_month: number | null;
+  shortfall_amount: number;
+  peak_shortfall: number;
+  binding_in_first_shortfall_month: string[];
+  contributing_rules: ContributingRule[];
+  material_assumptions: MaterialAssumption[];
+  /** Approved terms the engine does not model numerically (shown as risks, never as causes). */
+  not_modelled?: Array<ExplanationEvidence & { reason: string }>;
+  /** Approved terms left out because their evidence does not support them. */
+  excluded_unsupported?: Array<{ constraint_id: string; type: string; document: string; pdf_page: number; reasons: string[] }>;
+}
+
 export interface RunDetail extends RunSummary {
+  /** Null or {} for runs created before explanations existed. */
+  explanation?: RunExplanation | Record<string, never> | null;
   inputs_snapshot: Record<string, unknown>;
   household_snapshot: Record<string, unknown>;
   terms: TermProvenance[];
@@ -637,19 +766,23 @@ export type ExportKind =
   | "constraints_json"
   | "simulation_csv"
   | "results_json"
-  | "report_pdf";
+  | "report_pdf"
+  | "blind_spot_pdf";
 export const EXPORT_KINDS: ExportKind[] = [
   "constraints_csv",
   "constraints_json",
   "simulation_csv",
   "results_json",
   "report_pdf",
+  "blind_spot_pdf",
 ];
 export const EXPORT_KINDS_REQUIRING_RUN: ExportKind[] = ["simulation_csv", "results_json", "report_pdf"];
+export const EXPORT_KINDS_REQUIRING_BLIND_SPOT: ExportKind[] = ["blind_spot_pdf"];
 
 export interface ExportIn {
   kind: ExportKind;
   run_id?: UUID | null;
+  blind_spot_report_id?: UUID | null;
 }
 
 export type ExportStatus = "queued" | "running" | "ready" | "failed";
@@ -658,6 +791,7 @@ export interface ExportOut {
   id: UUID;
   household_id: UUID;
   run_id: UUID | null;
+  blind_spot_report_id?: UUID | null;
   kind: string;
   status: ExportStatus;
   filename: string | null;
@@ -677,8 +811,373 @@ export interface AuditOut {
   created_at: ISODateTime;
 }
 
+// ----------------------------------------------------------------------------- AI providers (BYOK)
+
+export type AIProvider = "anthropic" | "openai";
+export type CredentialStatus = "untested" | "valid" | "invalid" | "quota_exceeded" | "error";
+
+export interface ProviderInfo {
+  provider: AIProvider;
+  label: string;
+  default_model: string | null;
+}
+
+/** A stored key is never returned; only the masked `key_hint` (e.g. "…abcd"). */
+export interface CredentialOut {
+  provider: AIProvider;
+  key_hint: string;
+  model: string | null;
+  /** Anthropic workspace ID for keys not scoped to a workspace (an identifier, not a secret). */
+  workspace_id?: string | null;
+  is_active: boolean;
+  status: CredentialStatus | string;
+  last_tested_at: ISODateTime | null;
+  last_error_code: string | null;
+  last_error: string | null;
+  updated_at: ISODateTime;
+}
+
+export interface ServerFallback {
+  configured: boolean;
+  provider: string | null;
+  model: string | null;
+}
+
+export interface AIProvidersOut {
+  storage_available: boolean;
+  storage_message: string | null;
+  providers: ProviderInfo[];
+  credentials: CredentialOut[];
+  active_provider: AIProvider | null;
+  server_fallback: ServerFallback;
+  extraction_order: string;
+}
+
+export interface CredentialIn {
+  api_key: string;
+  model?: string | null;
+  workspace_id?: string | null;
+  activate: boolean;
+}
+
+export interface CredentialUpdate {
+  model?: string | null;
+  workspace_id?: string | null;
+  is_active?: boolean | null;
+}
+
+export interface CredentialTestOut {
+  ok: boolean;
+  code: string;
+  message: string;
+  credential: CredentialOut;
+}
+
+export interface ProviderModelsOut {
+  provider: AIProvider;
+  models: string[];
+}
+
 export interface HealthOut {
   status: "ok" | "degraded" | "unavailable";
   version: string;
   checks: Record<string, string>;
+}
+
+// ----------------------------------------------------------------------------- firms
+
+export type FirmRole = "admin" | "reviewer" | "advisor";
+export const FIRM_ROLES: FirmRole[] = ["admin", "reviewer", "advisor"];
+
+export interface FirmOut {
+  id: UUID;
+  name: string;
+  role: FirmRole;
+  created_at: ISODateTime;
+}
+
+export interface FirmMemberOut {
+  user_id: UUID;
+  email: string | null;
+  display_name: string | null;
+  role: FirmRole;
+  created_at: ISODateTime;
+}
+
+export interface FirmMemberIn {
+  email: string;
+  role: FirmRole;
+}
+
+// ----------------------------------------------------------------------------- fund library
+
+export type FundType = "non_traded_reit" | "interval_fund" | "private_fund" | "other";
+export const FUND_TYPES: FundType[] = ["non_traded_reit", "interval_fund", "private_fund", "other"];
+export type FundMetadataStatus = "needs_review" | "verified";
+export type FundStatus = "active" | "archived";
+
+/** Household asset kind -> library fund type it may link to. */
+export const ASSET_KIND_FUND_TYPE: Partial<Record<AssetKind, FundType>> = {
+  non_traded_reit: "non_traded_reit",
+  interval_fund: "interval_fund",
+  private_fund_commitment: "private_fund",
+  other: "other",
+};
+
+export interface FundIn {
+  firm_id?: UUID | null;
+  name: string;
+  fund_type: FundType;
+  issuer?: string | null;
+  ticker?: string | null;
+  share_class?: string | null;
+  sec_cik?: string | null;
+  aliases?: string[];
+  description?: string | null;
+}
+
+export interface FundUpdate {
+  name?: string | null;
+  fund_type?: FundType | null;
+  issuer?: string | null;
+  ticker?: string | null;
+  share_class?: string | null;
+  sec_cik?: string | null;
+  aliases?: string[] | null;
+  description?: string | null;
+  metadata_status?: FundMetadataStatus | null;
+  status?: FundStatus | null;
+}
+
+export interface FundOut {
+  id: UUID;
+  firm_id: UUID;
+  name: string;
+  fund_type: FundType;
+  issuer: string | null;
+  ticker: string | null;
+  share_class: string | null;
+  sec_cik: string | null;
+  aliases: string[];
+  description: string | null;
+  metadata_status: FundMetadataStatus;
+  status: FundStatus;
+  created_at: ISODateTime;
+  updated_at: ISODateTime;
+  document_count?: number;
+  approved_term_count?: number;
+  pending_term_count?: number;
+}
+
+export interface FundHoldingOut {
+  asset_id: UUID;
+  asset_name: string;
+  household_id: UUID;
+  household_name: string;
+}
+
+export interface FundDetail extends FundOut {
+  your_role: FirmRole;
+  documents: DocumentOut[];
+  linked_holdings: FundHoldingOut[];
+  linked_holdings_total: number;
+}
+
+export type FundDocCategory =
+  | "prospectus"
+  | "prospectus_supplement"
+  | "statement_of_additional_information"
+  | "interval_fund"
+  | "other";
+export const FUND_DOC_CATEGORIES: FundDocCategory[] = [
+  "prospectus",
+  "prospectus_supplement",
+  "statement_of_additional_information",
+  "interval_fund",
+  "other",
+];
+
+export interface FundDocumentInitiate {
+  filename: string;
+  category: FundDocCategory;
+  size_bytes: number;
+  sha256?: string | null;
+  effective_date?: ISODate | null;
+  supersedes_document_id?: UUID | null;
+}
+
+export interface FundDocumentUpdate {
+  effective_date?: ISODate | null;
+  supersedes_document_id?: UUID | null;
+}
+
+export interface FundTermsOut {
+  as_of: ISODate;
+  terms: ConstraintOut[];
+  /** Ids of approved terms in force on `as_of` (what a simulation on that date would use). */
+  applicable_ids: UUID[];
+}
+
+// ----------------------------------------------------------------------------- workspace
+
+export interface ReviewItem {
+  constraint: ConstraintOut;
+  owner_type: "household" | "fund";
+  owner_id: UUID;
+  owner_name: string;
+}
+
+export interface ReviewQueueOut {
+  items: ReviewItem[];
+  total: number;
+  household_items: number;
+  library_items: number;
+}
+
+export interface ScenarioListItem {
+  id: UUID;
+  name: string;
+  household_id: UUID;
+  household_name: string;
+  updated_at: ISODateTime;
+  latest_run_id: UUID | null;
+  latest_run_at: ISODateTime | null;
+  latest_first_shortfall_month: number | null;
+  latest_peak_shortfall: Decimal | null;
+}
+
+// ----------------------------------------------------------------------------- term conflicts (409)
+
+export interface TermConflictCandidate {
+  constraint_id: UUID;
+  value: number;
+  unit: string | null;
+  document: string;
+  pdf_page: number;
+  review_status: string;
+}
+
+export interface TermConflict {
+  term: string;
+  constraint_type: string;
+  asset_key: string;
+  candidates: TermConflictCandidate[];
+}
+
+export interface TermConflictDetails {
+  conflicts: TermConflict[];
+  as_of_date?: ISODate;
+}
+
+// ----------------------------------------------------------------------------- blind spots
+
+export type BlindSpotSeverity = "critical" | "high" | "moderate";
+
+export interface BlindSpotEvidence {
+  document: string;
+  pdf_page: number;
+  quote: string;
+  id?: UUID;
+  type?: string;
+}
+
+export interface BlindSpotRule {
+  rule: string;
+  peak_shortfall_reduction: number;
+  removes_shortfall: boolean;
+  basis: string;
+  relaxation?: string;
+  evidence: BlindSpotEvidence[];
+}
+
+export interface BlindSpotRisk {
+  rank: number;
+  variant: string;
+  label: string;
+  tier: string | number;
+  changes: string[];
+  severity: BlindSpotSeverity | string;
+  blind_spot: boolean;
+  first_shortfall_month: number | null;
+  shortfall_amount: number;
+  peak_shortfall: number;
+  peak_in_months_of_spending: number | null;
+  paper_wealth_first_shortfall_month: number | null;
+  binding_in_first_shortfall_month: string[];
+  contributing_rules: BlindSpotRule[];
+}
+
+export interface BlindSpotModelSummary {
+  first_shortfall_month: number | null;
+  shortfall_amount: number;
+  peak_shortfall: number;
+  min_cash: number;
+}
+
+export interface BlindSpotComparison {
+  variant: string;
+  label: string;
+  tier?: string | number;
+  changes: string[];
+  contract_aware: BlindSpotModelSummary;
+  paper_wealth: BlindSpotModelSummary;
+  monthly_cash: number[];
+  monthly_cash_paper_wealth: number[];
+}
+
+export interface BlindSpotResult {
+  method: string;
+  disclaimer: string;
+  monthly_spending: number;
+  summary: { variants: number; risks: number; blind_spots: number; critical: number };
+  risks: BlindSpotRisk[];
+  comparison: BlindSpotComparison[];
+}
+
+export interface BlindSpotSummary {
+  id: UUID;
+  household_id: UUID;
+  scenario_id: UUID;
+  engine_version: string;
+  as_of_date: ISODate;
+  risk_count: number;
+  blind_spot_count: number;
+  created_at: ISODateTime;
+}
+
+export interface BlindSpotOut extends BlindSpotSummary {
+  warnings: string[];
+  constraint_versions: Record<string, unknown>[];
+  result: BlindSpotResult;
+}
+
+// ----------------------------------------------------------------------------- reports (GET /me/reports)
+
+export interface ReportExportItem extends ExportOut {
+  household_name: string;
+}
+
+export interface ReportBlindSpotItem extends BlindSpotSummary {
+  household_name: string;
+  scenario_name: string;
+}
+
+export interface ReportsOut {
+  exports: ReportExportItem[];
+  blind_spot_reports: ReportBlindSpotItem[];
+}
+
+/** One entry of RunDetail.constraint_versions (backend/app/services/engine_adapter.py). */
+export interface RunConstraintVersion {
+  id: UUID;
+  revision: number;
+  type: string;
+  asset_key: string;
+  value: Decimal | null;
+  document: string;
+  pdf_page: number;
+  owner?: "household" | "fund" | string;
+  fund_id?: UUID | null;
+  effective_from?: ISODate | null;
+  effective_to?: ISODate | null;
 }

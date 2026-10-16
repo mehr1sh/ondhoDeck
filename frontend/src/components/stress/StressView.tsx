@@ -26,6 +26,7 @@ import { endpoints } from "@/lib/endpoints";
 import { EMPTY, formatDateTime, formatMoney, formatPercent, parseDecimal } from "@/lib/format";
 import { useApiQuery } from "@/lib/hooks";
 import type { StressGridPoint, StressOut, StressRequest } from "@/lib/types";
+import { RunErrorState } from "@/components/runs/TermConflict";
 
 export function stressGrid(result: StressOut): StressGridPoint[] {
   const grid = (result.search as { grid?: unknown }).grid;
@@ -73,7 +74,7 @@ function GridChart({ result, currency }: { result: StressOut; currency: string }
                 label={{ value: `Boundary ${formatPercent(boundary, 1)}`, position: "top", fontSize: 11, fill: "#7f1d1d" }}
               />
             )}
-            <Line type="monotone" dataKey="min_cash" name="Minimum cash" stroke="#2563eb" strokeWidth={2} dot={false} isAnimationActive={false} />
+            <Line type="linear" dataKey="min_cash" name="Minimum cash" stroke="#1e2430" strokeWidth={2} dot={false} isAnimationActive={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -212,7 +213,7 @@ export function StressView({
         <Link href={`/households/${householdId}/scenarios/${scenarioId}`} className="text-xs text-slate-600 hover:underline">
           ← Scenario
         </Link>
-        <h2 className="mt-1 text-lg font-semibold text-slate-900">Reverse stress test</h2>
+        <h2 className="font-display mt-1 text-[1.35rem] leading-snug text-ink">Reverse stress test</h2>
         <p className="text-sm text-slate-600">
           Finds the smallest equity drawdown at which this scenario first runs out of cash under the contract-aware model.
         </p>
@@ -221,7 +222,7 @@ export function StressView({
       {canEdit && (
         <Card title="Run a search">
           <form onSubmit={run} noValidate className="space-y-3">
-            {runError ? <ErrorState error={runError} /> : null}
+            <RunErrorState error={runError} />
             <div className="grid gap-3 sm:grid-cols-3">
               {PARAMS.map((p) => (
                 <TextField

@@ -1,11 +1,31 @@
 /** Typed wrappers for every /api/v1 endpoint used by the frontend. */
 import { api, apiRequest, newIdempotencyKey } from "@/lib/api";
 import type {
+  AIProvider,
+  AIProvidersOut,
   ApplyOut,
   AssetIn,
   AssetOut,
   AssetUpdate,
   AuditOut,
+  BlindSpotOut,
+  BlindSpotSummary,
+  ConstraintSupersede,
+  FirmMemberIn,
+  FirmMemberOut,
+  FirmOut,
+  FirmRole,
+  FundDetail,
+  FundDocumentInitiate,
+  FundDocumentUpdate,
+  FundIn,
+  FundOut,
+  FundTermsOut,
+  FundType,
+  FundUpdate,
+  ReviewQueueOut,
+  ReportsOut,
+  ScenarioListItem,
   CashFlowIn,
   CashFlowOut,
   CashFlowUpdate,
@@ -13,6 +33,10 @@ import type {
   ConstraintDetail,
   ConstraintOut,
   ConstraintUpdate,
+  CredentialIn,
+  CredentialOut,
+  CredentialTestOut,
+  CredentialUpdate,
   DocumentInitiate,
   DocumentInitiateOut,
   DocumentOut,
@@ -34,6 +58,7 @@ import type {
   PreventionOut,
   PreventionRequest,
   ProfileOut,
+  ProviderModelsOut,
   ProfileUpdate,
   RecommendationDecision,
   RecommendationOut,
@@ -43,6 +68,7 @@ import type {
   ScenarioDefaults,
   ScenarioIn,
   ScenarioOut,
+  ScenarioPreset,
   ScenarioUpdate,
   SignedUrlOut,
   StressOut,
@@ -63,6 +89,16 @@ export const endpoints = {
   deleteMe: () => api.del("/me", { confirm: "DELETE MY ACCOUNT" }),
   myDocuments: (q?: PageQuery) => api.get<Page<DocumentOut>>("/me/documents", pq(q)),
 
+  // AI provider keys (BYOK). The key is only ever sent in a request body, never in a URL.
+  aiProviders: () => api.get<AIProvidersOut>("/me/ai-providers"),
+  saveAiCredential: (provider: AIProvider, body: CredentialIn) =>
+    api.put<CredentialTestOut>(`/me/ai-providers/${provider}`, body),
+  testAiCredential: (provider: AIProvider) => api.post<CredentialTestOut>(`/me/ai-providers/${provider}/test`, {}),
+  aiProviderModels: (provider: AIProvider) => api.get<ProviderModelsOut>(`/me/ai-providers/${provider}/models`),
+  updateAiCredential: (provider: AIProvider, body: CredentialUpdate) =>
+    api.patch<CredentialOut>(`/me/ai-providers/${provider}`, body),
+  deleteAiCredential: (provider: AIProvider) => api.del(`/me/ai-providers/${provider}`),
+
   // households
   listHouseholds: (q?: PageQuery) => api.get<Page<HouseholdOut>>("/households", pq(q)),
   createHousehold: (body: HouseholdIn) => api.post<HouseholdOut>("/households", body),
@@ -72,6 +108,7 @@ export const endpoints = {
   deleteHousehold: (hid: string) => api.del(`/households/${hid}`),
   householdSummary: (hid: string) => api.get<HouseholdSummary>(`/households/${hid}/summary`),
   auditEvents: (hid: string, q?: PageQuery) => api.get<Page<AuditOut>>(`/households/${hid}/audit-events`, pq(q)),
+  aiProviderEvents: (q?: PageQuery) => api.get<Page<AuditOut>>("/me/ai-providers-events", pq(q)),
 
   // financial records
   listAssets: (hid: string, q?: PageQuery) => api.get<Page<AssetOut> | AssetOut[]>(`/households/${hid}/assets`, pq(q)),
@@ -135,9 +172,13 @@ export const endpoints = {
     api.post<ConstraintDetail>(`/constraints/${cid}/approve`, body),
   rejectConstraint: (cid: string, body: ConstraintDecision) =>
     api.post<ConstraintDetail>(`/constraints/${cid}/reject`, body),
+  /** Marks `cid` (the newer term) as superseding an older approved term of the same type. */
+  supersedeConstraint: (cid: string, body: ConstraintSupersede) =>
+    api.post<ConstraintOut[]>(`/constraints/${cid}/supersede`, body),
 
   // scenarios & runs
   scenarioDefaults: () => api.get<ScenarioDefaults>("/scenario-defaults"),
+  scenarioPresets: () => api.get<ScenarioPreset[]>("/scenario-presets"),
   listScenarios: (hid: string, q?: PageQuery) =>
     api.get<Page<ScenarioOut> | ScenarioOut[]>(`/households/${hid}/scenarios`, pq(q)),
   createScenario: (hid: string, body: ScenarioIn) => api.post<ScenarioOut>(`/households/${hid}/scenarios`, body),
@@ -146,7 +187,8 @@ export const endpoints = {
   deleteScenario: (sid: string) => api.del(`/scenarios/${sid}`),
   runScenario: (sid: string, idempotencyKey = newIdempotencyKey()) =>
     api.post<RunSummary>(`/scenarios/${sid}/runs`, {}, { idempotencyKey }),
-  listRuns: (hid: string, q?: PageQuery) => api.get<Page<RunSummary>>(`/households/${hid}/runs`, pq(q)),
+  listRuns: (hid: string, q?: PageQuery & { scenario_id?: string }) =>
+    api.get<Page<RunSummary>>(`/households/${hid}/runs`, { ...pq(q), scenario_id: q?.scenario_id }),
   getRun: (runId: string) => api.get<RunDetail>(`/runs/${runId}`),
 
   // reverse stress
@@ -164,9 +206,52 @@ export const endpoints = {
     api.post<RecommendationOut>(`/recommendations/${id}/decision`, body),
   applyRecommendation: (id: string) => api.post<ApplyOut>(`/recommendations/${id}/apply`, {}),
 
+  // blind-spot detector
+  runBlindSpots: (sid: string, idempotencyKey = newIdempotencyKey()) =>
+    api.post<BlindSpotOut>(`/scenarios/${sid}/blind-spots`, {}, { idempotencyKey }),
+  listBlindSpotReports: (hid: string, q?: PageQuery & { scenario_id?: string }) =>
+    api.get<Page<BlindSpotSummary>>(`/households/${hid}/blind-spot-reports`, { ...pq(q), scenario_id: q?.scenario_id }),
+  getBlindSpotReport: (id: string) => api.get<BlindSpotOut>(`/blind-spot-reports/${id}`),
+
   // exports
   listExports: (hid: string, q?: PageQuery) => api.get<Page<ExportOut>>(`/households/${hid}/exports`, pq(q)),
   requestExport: (hid: string, body: ExportIn) => api.post<ExportOut>(`/households/${hid}/exports`, body),
   getExport: (id: string) => api.get<ExportOut>(`/exports/${id}`),
   downloadExport: (id: string) => api.get<SignedUrlOut>(`/exports/${id}/download`),
+
+  // workspace (cross-household)
+  reviewQueue: (limit?: number) => api.get<ReviewQueueOut>("/me/review-queue", { limit }),
+  myScenarios: () => api.get<ScenarioListItem[]>("/me/scenarios"),
+  myReports: (limit?: number) => api.get<ReportsOut>("/me/reports", { limit }),
+
+  // firms
+  myFirms: () => api.get<FirmOut[]>("/me/firms"),
+  renameFirm: (firmId: string, name: string) => api.patch<FirmOut>(`/firms/${firmId}`, { name }),
+  firmMembers: (firmId: string) => api.get<FirmMemberOut[]>(`/firms/${firmId}/members`),
+  addFirmMember: (firmId: string, body: FirmMemberIn) => api.post<FirmMemberOut[]>(`/firms/${firmId}/members`, body),
+  changeFirmMemberRole: (firmId: string, userId: string, role: FirmRole) =>
+    api.patch<FirmMemberOut[]>(`/firms/${firmId}/members/${userId}`, { role }),
+  removeFirmMember: (firmId: string, userId: string) => api.del(`/firms/${firmId}/members/${userId}`),
+
+  // fund library
+  searchFunds: (
+    q?: PageQuery & { q?: string; fund_type?: FundType | ""; include_archived?: boolean; firm_id?: string },
+  ) =>
+    api.get<Page<FundOut>>("/funds", {
+      ...pq(q),
+      q: q?.q?.trim() || undefined,
+      fund_type: q?.fund_type || undefined,
+      include_archived: q?.include_archived ? true : undefined,
+      firm_id: q?.firm_id,
+    }),
+  createFund: (body: FundIn) => api.post<FundOut>("/funds", body),
+  getFund: (fundId: string) => api.get<FundDetail>(`/funds/${fundId}`),
+  updateFund: (fundId: string, body: FundUpdate) => api.patch<FundOut>(`/funds/${fundId}`, body),
+  fundDocuments: (fundId: string) => api.get<DocumentOut[] | Page<DocumentOut>>(`/funds/${fundId}/documents`),
+  initiateFundUpload: (fundId: string, body: FundDocumentInitiate) =>
+    api.post<DocumentInitiateOut>(`/funds/${fundId}/documents`, body),
+  updateLibraryDocument: (docId: string, body: FundDocumentUpdate) =>
+    api.patch<DocumentOut>(`/documents/${docId}/library-metadata`, body),
+  fundTerms: (fundId: string, asOf?: string) => api.get<FundTermsOut>(`/funds/${fundId}/terms`, { as_of: asOf }),
+  fundAudit: (fundId: string, q?: PageQuery) => api.get<Page<AuditOut>>(`/funds/${fundId}/audit-events`, pq(q)),
 };

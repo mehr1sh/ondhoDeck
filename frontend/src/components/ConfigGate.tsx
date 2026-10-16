@@ -8,10 +8,10 @@ export function ConfigGate({ children }: { children: ReactNode }) {
   const check = checkPublicEnv();
   if (check.ok) return <>{children}</>;
   return (
-    <main className="flex min-h-screen items-center justify-center bg-slate-100 p-4">
-      <div role="alert" className="w-full max-w-lg rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
-        <p className="text-sm font-semibold text-slate-500">SlipSlopes</p>
-        <h1 className="mt-1 text-xl font-semibold text-slate-900">Configuration required</h1>
+    <main className="flex min-h-screen items-center justify-center bg-page p-4">
+      <div role="alert" className="w-full max-w-lg rounded-md border border-line bg-surface p-6">
+        <p className="text-sm font-semibold text-slate-500">OndhoDeck</p>
+        <h1 className="font-display mt-1 text-2xl text-ink">Configuration required</h1>
         <p className="mt-2 text-sm text-slate-700">
           This deployment is missing required environment variables, so the app cannot connect to
           authentication or the API:

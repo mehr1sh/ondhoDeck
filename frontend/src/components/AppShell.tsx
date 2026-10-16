@@ -2,10 +2,11 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import type { User } from "@supabase/supabase-js";
 import { Brand } from "@/components/Brand";
 import { Button, Spinner, cx } from "@/components/ui";
+import { endpoints } from "@/lib/endpoints";
 import { decideAuthRedirect } from "@/lib/authGuard";
 import { getSupabaseBrowserClient } from "@/lib/supabase/client";
 
@@ -22,11 +23,72 @@ export function useSession(): SessionContextValue {
   return ctx;
 }
 
-const NAV = [
-  { href: "/", label: "Dashboard", match: (p: string) => p === "/" },
-  { href: "/households", label: "Households", match: (p: string) => p.startsWith("/households") },
-  { href: "/settings", label: "Settings", match: (p: string) => p.startsWith("/settings") },
+export interface NavItem {
+  href: string;
+  label: string;
+  match: (p: string) => boolean;
+}
+
+export const NAV: NavItem[] = [
+  { href: "/", label: "Overview", match: (p) => p === "/" },
+  { href: "/households", label: "Households", match: (p) => p.startsWith("/households") },
+  { href: "/funds", label: "Fund Library", match: (p) => p.startsWith("/funds") },
+  { href: "/documents", label: "Documents", match: (p) => p.startsWith("/documents") },
+  { href: "/review", label: "Review Queue", match: (p) => p.startsWith("/review") },
+  { href: "/scenarios", label: "Liquidity Scenarios", match: (p) => p.startsWith("/scenarios") },
+  { href: "/reports", label: "Reports", match: (p) => p.startsWith("/reports") },
+  { href: "/settings", label: "Settings", match: (p) => p.startsWith("/settings") },
 ];
+
+interface ReviewCountValue {
+  count: number | null;
+  refresh: () => void;
+}
+
+const ReviewCountContext = createContext<ReviewCountValue>({ count: null, refresh: () => undefined });
+
+/** Lets pages refresh the sidebar's Review Queue badge after approving or rejecting terms. */
+export function useReviewCount(): ReviewCountValue {
+  return useContext(ReviewCountContext);
+}
+
+/** Primary navigation. Exported separately so it can be rendered and tested without the auth guard. */
+export function SidebarNav({ pathname, reviewCount }: { pathname: string; reviewCount: number | null }) {
+  return (
+    <nav aria-label="Main">
+      <ul className="space-y-0.5">
+        {NAV.map((item) => {
+          const active = item.match(pathname);
+          const showCount = item.href === "/review" && reviewCount !== null && reviewCount > 0;
+          return (
+            <li key={item.href}>
+              <Link
+                href={item.href}
+                aria-current={active ? "page" : undefined}
+                className={cx(
+                  "flex items-center justify-between border-l-2 px-3 py-2 text-sm focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent",
+                  active
+                    ? "border-accent bg-accent-subtle font-semibold text-accent-ink"
+                    : "border-transparent font-medium text-ink-2 hover:bg-surface-muted hover:text-ink",
+                )}
+              >
+                <span>{item.label}</span>
+                {showCount && (
+                  <span
+                    className="ml-2 rounded-sm bg-ink px-1.5 py-0.5 text-[11px] font-semibold leading-none text-white tabular-nums"
+                    aria-label={`${reviewCount} items awaiting review`}
+                  >
+                    {reviewCount}
+                  </span>
+                )}
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
 /** Client-side guard + application chrome (sidebar on desktop, drawer on mobile). */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -67,6 +129,17 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   useEffect(() => setDrawerOpen(false), [pathname]);
 
+  const [reviewCount, setReviewCount] = useState<number | null>(null);
+  const refreshReviewCount = useCallback(() => {
+    endpoints
+      .reviewQueue(1)
+      .then((r) => setReviewCount(r.total))
+      .catch(() => setReviewCount(null));
+  }, []);
+  useEffect(() => {
+    if (user) refreshReviewCount();
+  }, [user, pathname, refreshReviewCount]);
+
   const signOut = async () => {
     await getSupabaseBrowserClient().auth.signOut();
     router.replace("/login");
@@ -74,47 +147,29 @@ export function AppShell({ children }: { children: ReactNode }) {
 
   if (checking || !user) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-100">
+      <div className="flex min-h-screen items-center justify-center bg-page">
         <Spinner label="Checking your session…" />
       </div>
     );
   }
 
-  const nav = (
-    <nav aria-label="Main" className="space-y-1">
-      {NAV.map((item) => {
-        const active = item.match(pathname);
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            aria-current={active ? "page" : undefined}
-            className={cx(
-              "block rounded-md px-3 py-2 text-sm font-medium",
-              active ? "bg-slate-800 text-white" : "text-slate-700 hover:bg-slate-200",
-            )}
-          >
-            {item.label}
-          </Link>
-        );
-      })}
-    </nav>
-  );
+  const nav = <SidebarNav pathname={pathname} reviewCount={reviewCount} />;
 
   return (
     <SessionContext.Provider value={{ user, signOut }}>
-      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-white focus:px-3 focus:py-2">
+      <ReviewCountContext.Provider value={{ count: reviewCount, refresh: refreshReviewCount }}>
+      <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-surface focus:px-3 focus:py-2">
         Skip to content
       </a>
-      <div className="min-h-screen bg-slate-100 lg:flex">
+      <div className="min-h-screen bg-page lg:flex">
         {/* Desktop sidebar */}
-        <aside className="hidden w-60 shrink-0 flex-col border-r border-slate-200 bg-slate-50 p-4 lg:flex">
-          <Link href="/" className="mb-6 block">
+        <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-line bg-surface py-5 pr-3 lg:flex">
+          <Link href="/" className="mb-7 block pl-4">
             <Brand />
           </Link>
           {nav}
-          <div className="mt-auto space-y-2 border-t border-slate-200 pt-4">
-            <p className="truncate text-xs text-slate-600" title={user.email ?? undefined}>
+          <div className="mt-auto space-y-2 border-t border-line pl-4 pt-4">
+            <p className="truncate text-xs text-ink-3" title={user.email ?? undefined}>
               {user.email}
             </p>
             <Button variant="secondary" size="sm" onClick={signOut} className="w-full">
@@ -124,11 +179,11 @@ export function AppShell({ children }: { children: ReactNode }) {
         </aside>
 
         {/* Mobile top bar */}
-        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-slate-200 bg-white px-4 py-2 lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-line bg-surface px-4 py-2 lg:hidden">
           <Link href="/">
             <Brand compact />
           </Link>
-          <span className="text-sm font-semibold text-slate-900">SlipSlopes</span>
+          <span className="font-display text-base text-ink">OndhoDeck</span>
           <Button
             variant="ghost"
             size="sm"
@@ -140,10 +195,10 @@ export function AppShell({ children }: { children: ReactNode }) {
           </Button>
         </header>
         {drawerOpen && (
-          <div id="mobile-drawer" className="border-b border-slate-200 bg-slate-50 p-4 lg:hidden">
+          <div id="mobile-drawer" className="sticky top-[49px] z-20 max-h-[calc(100vh-49px)] overflow-y-auto border-b border-line bg-surface py-3 pr-3 lg:hidden">
             {nav}
-            <div className="mt-4 flex items-center justify-between gap-2 border-t border-slate-200 pt-3">
-              <span className="truncate text-xs text-slate-600">{user.email}</span>
+            <div className="mt-4 flex items-center justify-between gap-2 border-t border-line pl-4 pt-3">
+              <span className="truncate text-xs text-ink-3">{user.email}</span>
               <Button variant="secondary" size="sm" onClick={signOut}>
                 Sign out
               </Button>
@@ -151,10 +206,11 @@ export function AppShell({ children }: { children: ReactNode }) {
           </div>
         )}
 
-        <main id="main" className="min-w-0 flex-1 px-4 py-5 sm:px-6 lg:px-8">
+        <main id="main" className="min-w-0 flex-1 px-4 py-6 sm:px-6 lg:px-12 lg:py-10">
           <div className="mx-auto max-w-7xl">{children}</div>
         </main>
       </div>
+      </ReviewCountContext.Provider>
     </SessionContext.Provider>
   );
 }

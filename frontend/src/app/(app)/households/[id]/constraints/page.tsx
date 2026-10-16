@@ -17,7 +17,15 @@ import {
   th,
   thNum,
 } from "@/components/ui";
-import { ConfidenceBadge, QuoteVerifiedBadge, ReviewStatusBadge, SourceTypeBadge } from "@/components/badges";
+import {
+  AmbiguousBadge,
+  ConfidenceBadge,
+  QuoteVerifiedBadge,
+  ReviewStatusBadge,
+  SourceTypeBadge,
+  ValidationIssuesBadge,
+  ValueKindBadge,
+} from "@/components/badges";
 import { useHousehold } from "@/components/household/HouseholdContext";
 import { endpoints } from "@/lib/endpoints";
 import { EMPTY, humanize } from "@/lib/format";
@@ -60,10 +68,15 @@ export default function ConstraintsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h2 className="text-base font-semibold text-slate-900">Contract Explorer</h2>
-        <p className="text-sm text-slate-600">
-          Constraints extracted from your documents, each with its cited evidence. Approve or edit them before they are
-          used in simulations.
+        <h2 className="font-display text-[1.35rem] text-ink">Terms</h2>
+        <p className="mt-1 max-w-3xl text-sm text-ink-3">
+          Terms extracted from this household&apos;s agreements, each with its cited evidence. Approve or edit them before
+          they are used in analyses. A cap marked “Maximum” is a limit the issuer may fill less of, not a guaranteed
+          payout. Terms from public offering documents are reviewed in the{" "}
+          <Link href="/funds" className="underline">
+            Fund Library
+          </Link>
+          .
         </p>
       </div>
       <div className="grid gap-3 sm:grid-cols-2 lg:max-w-2xl">
@@ -119,6 +132,9 @@ export default function ConstraintsPage() {
                     </td>
                     <td className={td}>
                       <ConstraintValue c={c} />
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        <ValueKindBadge valueKind={c.value_kind} />
+                      </span>
                     </td>
                     <td className={td}>
                       <span className="break-all">{c.document_name || EMPTY}</span>
@@ -128,7 +144,11 @@ export default function ConstraintsPage() {
                       <SourceTypeBadge sourceType={c.source_type} />
                     </td>
                     <td className={td}>
-                      <QuoteVerifiedBadge verified={c.quote_verified} />
+                      <span className="flex flex-wrap gap-1">
+                        <QuoteVerifiedBadge verified={c.quote_verified} />
+                        <AmbiguousBadge ambiguous={c.ambiguous} />
+                        <ValidationIssuesBadge issues={c.validation_issues} />
+                      </span>
                     </td>
                     <td className={td}>
                       <ConfidenceBadge confidence={c.confidence} />

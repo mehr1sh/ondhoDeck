@@ -89,3 +89,63 @@ export function AssumptionBadge() {
     </Badge>
   );
 }
+
+export const VALUE_KIND_INFO: Record<string, { label: string; title: string }> = {
+  maximum: {
+    label: "Maximum (cap)",
+    title: "A limit the counterparty may fill less of (or not at all). It is not a guaranteed payout.",
+  },
+  minimum: { label: "Minimum", title: "A floor: at least this value applies (e.g. a minimum notice period)." },
+  exact: { label: "Exact", title: "The clause states this value exactly." },
+  range: { label: "Range", title: "The clause gives a range between the lower and upper bound." },
+  qualitative: { label: "Qualitative", title: "The clause has no numeric value." },
+};
+
+export function ValueKindBadge({ valueKind }: { valueKind: string | null | undefined }) {
+  if (!valueKind) return null;
+  const info = VALUE_KIND_INFO[valueKind];
+  return (
+    <Badge tone={valueKind === "maximum" ? "info" : "neutral"} title={info?.title}>
+      {info?.label ?? humanize(valueKind)}
+    </Badge>
+  );
+}
+
+export function AmbiguousBadge({ ambiguous }: { ambiguous: boolean | undefined }) {
+  if (!ambiguous) return null;
+  return (
+    <Badge tone="warning" title="The clause contains discretion or conditions that were not fully captured">
+      Ambiguous
+    </Badge>
+  );
+}
+
+export function ValidationIssuesBadge({ issues }: { issues: Array<{ severity?: string }> | undefined }) {
+  if (!issues || issues.length === 0) return null;
+  const errors = issues.filter((i) => i.severity === "error").length;
+  const n = issues.length;
+  return (
+    <Badge
+      tone={errors > 0 ? "danger" : "warning"}
+      title={`${n} automated validation ${n === 1 ? "issue" : "issues"}${errors ? `, ${errors} serious` : ""}. Open the constraint to review.`}
+    >
+      {n} validation {n === 1 ? "issue" : "issues"}
+    </Badge>
+  );
+}
+
+const CREDENTIAL_STATUS: Record<string, { label: string; tone: BadgeTone; title: string }> = {
+  untested: { label: "Untested", tone: "neutral", title: "The key has not been tested since it was saved or changed" },
+  valid: { label: "Valid", tone: "success", title: "The last connection test succeeded" },
+  invalid: { label: "Invalid key", tone: "danger", title: "The provider rejected this key" },
+  quota_exceeded: { label: "Quota exceeded", tone: "warning", title: "The provider account has no remaining quota" },
+  error: { label: "Test error", tone: "danger", title: "The last connection test failed" },
+};
+export function CredentialStatusBadge({ status }: { status: string }) {
+  const s = CREDENTIAL_STATUS[status];
+  return (
+    <Badge tone={s?.tone ?? "neutral"} title={s?.title}>
+      {s?.label ?? humanize(status)}
+    </Badge>
+  );
+}

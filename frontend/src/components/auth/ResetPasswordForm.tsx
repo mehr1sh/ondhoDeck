@@ -39,7 +39,7 @@ export function ResetPasswordForm() {
   if (sent) {
     return (
       <div className="space-y-3" role="status">
-        <h1 className="text-lg font-semibold text-slate-900">Check your email</h1>
+        <h1 className="font-display text-[1.35rem] leading-snug text-ink">Check your email</h1>
         <p className="text-sm text-slate-700">
           If an account exists for <strong className="break-all">{email.trim()}</strong>, a password reset link is on its
           way. The link opens a page where you can choose a new password.
@@ -53,7 +53,7 @@ export function ResetPasswordForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4" aria-labelledby="reset-title">
-      <h1 id="reset-title" className="text-lg font-semibold text-slate-900">
+      <h1 id="reset-title" className="font-display text-[1.35rem] leading-snug text-ink">
         Reset your password
       </h1>
       <p className="text-sm text-slate-600">Enter your account email and we will send you a reset link.</p>

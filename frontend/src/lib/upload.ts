@@ -5,7 +5,7 @@
  */
 import { ApiError } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
-import type { DocCategory, DocumentOut, JobOut } from "@/lib/types";
+import type { DocCategory, DocumentInitiateOut, DocumentOut, JobOut } from "@/lib/types";
 
 /** Mirrors the API default (max_upload_mb=50); the server-provided max_bytes is checked too. */
 export const MAX_CLIENT_UPLOAD_BYTES = 50 * 1024 * 1024;
@@ -119,11 +119,35 @@ export async function pollDocument(
   }
 }
 
-/** Runs the full upload flow, reporting each state transition through `onState`. */
+/** Runs the full household upload flow, reporting each state transition through `onState`. */
 export async function runUpload(
   householdId: string,
   file: File,
   category: DocCategory,
+  onState: (s: UploadState) => void,
+  deps: UploadDeps = {},
+): Promise<UploadState> {
+  return runUploadWith(
+    (meta) => endpoints.initiateUpload(householdId, { ...meta, category }),
+    file,
+    onState,
+    deps,
+  );
+}
+
+export interface UploadMeta {
+  filename: string;
+  size_bytes: number;
+  sha256: string;
+}
+
+/**
+ * Same flow with a caller-supplied initiate step (e.g. a Fund Library document:
+ * POST /funds/{id}/documents). Content upload, completion and polling are shared.
+ */
+export async function runUploadWith(
+  initiate: (meta: UploadMeta) => Promise<DocumentInitiateOut>,
+  file: File,
   onState: (s: UploadState) => void,
   deps: UploadDeps = {},
 ): Promise<UploadState> {
@@ -147,12 +171,7 @@ export async function runUpload(
   onState({ phase: "initiating" });
   let initiated;
   try {
-    initiated = await endpoints.initiateUpload(householdId, {
-      filename: file.name,
-      category,
-      size_bytes: file.size,
-      sha256: digest,
-    });
+    initiated = await initiate({ filename: file.name, size_bytes: file.size, sha256: digest });
   } catch (e) {
     return fail(e);
   }

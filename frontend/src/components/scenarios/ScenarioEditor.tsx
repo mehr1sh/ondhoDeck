@@ -12,6 +12,7 @@ import {
   LinkButton,
   LoadingBlock,
   Notice,
+  SelectField,
   TextAreaField,
   TextField,
 } from "@/components/ui";
@@ -21,8 +22,9 @@ import { ApiError } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { humanize } from "@/lib/format";
 import { describeError, useApiQuery } from "@/lib/hooks";
-import type { AssumptionField, ScenarioAssumptions, ScenarioDefaults, ScenarioOut } from "@/lib/types";
+import type { AssumptionField, ScenarioAssumptions, ScenarioDefaults, ScenarioOut, ScenarioPreset } from "@/lib/types";
 import { groupFields, inputToScalar, isFractionPercent, scalarToInput, SPECIAL_KEYS, unitSuffix } from "./assumptions";
+import { RunErrorState, isTermConflict } from "@/components/runs/TermConflict";
 
 interface FxRow {
   currency: string;
@@ -37,6 +39,8 @@ interface EditorState {
   booleans: Record<string, boolean>;
   fx: FxRow[];
   sources: Record<string, string>;
+  /** YYYY-MM-DD or "" (= the run date). */
+  asOfDate: string;
 }
 
 function merged(defaults: ScenarioDefaults, scenario?: ScenarioOut | null): Record<string, unknown> {
@@ -71,7 +75,66 @@ function buildState(defaults: ScenarioDefaults, scenario?: ScenarioOut | null): 
     booleans,
     fx,
     sources: { ...((values.assumption_sources as Record<string, string>) ?? {}) },
+    asOfDate: typeof values.as_of_date === "string" ? values.as_of_date : "",
   };
+}
+
+/**
+ * Applies a preset's assumption values to the form. Keeps the name, description, FX rates and source notes the
+ * user already entered (FX rates are household-specific, not part of a stress preset).
+ */
+export function applyPreset(defaults: ScenarioDefaults, state: EditorState, preset: ScenarioPreset): EditorState {
+  const pseudo = { assumptions: preset.assumptions } as unknown as ScenarioOut;
+  const next = buildState(defaults, pseudo);
+  return {
+    ...next,
+    name: state.name || preset.name,
+    description: state.description || preset.description,
+    fx: state.fx,
+    sources: state.sources,
+    asOfDate: state.asOfDate,
+  };
+}
+
+function PresetPicker({
+  presets,
+  disabled,
+  onApply,
+}: {
+  presets: ScenarioPreset[];
+  disabled: boolean;
+  onApply: (p: ScenarioPreset) => void;
+}) {
+  const [selected, setSelected] = useState("");
+  const preset = presets.find((p) => p.id === selected);
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-end gap-2">
+        <div className="min-w-64 flex-1">
+          <SelectField
+            label="Start from a preset"
+            value={selected}
+            disabled={disabled}
+            onChange={(e) => setSelected(e.target.value)}
+            options={[{ value: "", label: "Choose a preset…" }, ...presets.map((p) => ({ value: p.id, label: p.name }))]}
+          />
+        </div>
+        <Button variant="secondary" disabled={disabled || !preset} onClick={() => preset && onApply(preset)}>
+          Apply preset
+        </Button>
+      </div>
+      {preset && (
+        <div className="text-sm text-slate-700">
+          <p>{preset.description}</p>
+          <p className="mt-1 text-xs font-medium text-slate-600">{preset.label}</p>
+        </div>
+      )}
+      <p className="text-xs text-slate-600">
+        Applying a preset replaces the assumption values below (FX rates and source notes are kept). Review them before
+        saving.
+      </p>
+    </div>
+  );
 }
 
 /** Builds the assumptions payload; returns field errors keyed like the API (assumptions.<key>[.<sub>]). */
@@ -116,6 +179,9 @@ export function buildAssumptions(
   const sources: Record<string, string> = {};
   for (const [k, v] of Object.entries(state.sources)) if (v.trim()) sources[k] = v.trim();
   out.assumption_sources = sources;
+  const asOf = state.asOfDate.trim();
+  if (asOf && !/^\d{4}-\d{2}-\d{2}$/.test(asOf)) errors["assumptions.as_of_date"] = "Use the format YYYY-MM-DD.";
+  out.as_of_date = asOf || null;
   return { assumptions: out as Partial<ScenarioAssumptions>, errors };
 }
 
@@ -256,6 +322,7 @@ export function ScenarioEditor({
   const isNew = scenarioId === "new";
   const defaults = useApiQuery(() => endpoints.scenarioDefaults(), []);
   const scenario = useApiQuery(() => endpoints.getScenario(scenarioId), [scenarioId], !isNew);
+  const presets = useApiQuery(() => endpoints.scenarioPresets(), []);
   const [state, setState] = useState<EditorState | null>(null);
   const [dirty, setDirty] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -332,9 +399,11 @@ export function ScenarioEditor({
       toast.success("Simulation complete");
       router.push(`/households/${householdId}/runs/${result.id}`);
     } catch (e) {
-      const d = describeError(e);
       setFormError(e);
-      toast.error(d.message, d.requestId ? `Request ID: ${d.requestId}` : undefined);
+      if (!isTermConflict(e)) {
+        const d = describeError(e);
+        toast.error(d.message, d.requestId ? `Request ID: ${d.requestId}` : undefined);
+      }
     } finally {
       setRunning(false);
     }
@@ -368,7 +437,7 @@ export function ScenarioEditor({
           <Link href={`/households/${householdId}/scenarios`} className="text-xs text-slate-600 hover:underline">
             ← Scenarios
           </Link>
-          <h2 className="mt-1 text-lg font-semibold text-slate-900">{isNew ? "New scenario" : state.name || "Scenario"}</h2>
+          <h2 className="font-display mt-1 text-[1.35rem] leading-snug text-ink">{isNew ? "New scenario" : state.name || "Scenario"}</h2>
         </div>
         <div className="flex flex-wrap gap-2">
           {!isNew && (
@@ -379,6 +448,12 @@ export function ScenarioEditor({
               <LinkButton href={`${base}/prevention`} size="sm">
                 Prevention planner
               </LinkButton>
+              <a
+                href="#blind-spots"
+                className="inline-flex items-center rounded-md border border-line-strong bg-surface px-2 py-1 text-xs font-medium text-ink hover:bg-surface-muted"
+              >
+                Blind-spot check
+              </a>
             </>
           )}
         </div>
@@ -389,7 +464,39 @@ export function ScenarioEditor({
         approved constraints, and balances and scheduled obligations come from the household profile at run time.
       </Notice>
 
-      {formError ? <ErrorState error={formError} /> : null}
+      <RunErrorState error={formError} />
+
+      {canEdit && (presets.data?.length ?? 0) > 0 && (
+        <Card title={<span className="flex items-center gap-2">Presets <AssumptionBadge /></span>}>
+          <PresetPicker
+            presets={presets.data ?? []}
+            disabled={disabled}
+            onApply={(p) => {
+              update((s) => applyPreset(defaults.data!, s, p));
+              setErrors({});
+              toast.success(`Applied preset: ${p.name}`, p.label);
+            }}
+          />
+        </Card>
+      )}
+
+      <Card title={<span className="flex items-center gap-2">Projection start (as-of date) <AssumptionBadge /></span>}>
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TextField
+            label="As-of date"
+            type="date"
+            value={state.asOfDate}
+            disabled={disabled}
+            error={errors["assumptions.as_of_date"]}
+            hint="The date of projection month 1. Fund Library terms in force on this date are used. Leave empty to use the date the analysis is run."
+            onChange={(e) => update((s) => ({ ...s, asOfDate: e.target.value }))}
+          />
+          <p className="self-center text-xs text-ink-3">
+            A term superseded by a newer document still applies before its end date, so an earlier as-of date can select the
+            older term.
+          </p>
+        </div>
+      </Card>
 
       <Card title="Scenario">
         <div className="grid gap-3 sm:grid-cols-2">

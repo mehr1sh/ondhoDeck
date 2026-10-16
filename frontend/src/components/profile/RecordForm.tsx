@@ -1,11 +1,29 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState, type FormEvent, type ReactNode } from "react";
 import { Button, CheckboxField, ErrorState, SelectField, TextAreaField, TextField } from "@/components/ui";
 import { ApiError } from "@/lib/api";
 import { humanize, normalizeDecimalInput, parseDecimal } from "@/lib/format";
 
-export type FieldType = "text" | "textarea" | "money" | "select" | "int" | "checkbox" | "date" | "currency" | "percent";
+export type FieldType =
+  | "text"
+  | "textarea"
+  | "money"
+  | "select"
+  | "int"
+  | "checkbox"
+  | "date"
+  | "currency"
+  | "percent"
+  | "custom";
+
+export interface CustomFieldProps {
+  value: string;
+  set: (v: string) => void;
+  error?: string;
+  values: FormValues;
+  initial?: Record<string, unknown> | null;
+}
 
 export type FormValues = Record<string, string | boolean>;
 
@@ -20,6 +38,10 @@ export interface FieldDef {
   maxLength?: number;
   hint?: string;
   showIf?: (values: FormValues) => boolean;
+  /** Clear this field when any of these fields change (e.g. a fund link when the asset kind changes). */
+  resetOn?: string[];
+  /** Renderer for `custom` fields; the value is a string ("" = null in the API body). */
+  render?: (props: CustomFieldProps) => ReactNode;
 }
 
 const MONEY_RE = /^\d{1,16}(\.\d{1,2})?$/;
@@ -136,7 +158,12 @@ export function RecordForm({
   const [formError, setFormError] = useState<unknown>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const set = (name: string, v: string | boolean) => setValues((prev) => ({ ...prev, [name]: v }));
+  const set = (name: string, v: string | boolean) =>
+    setValues((prev) => {
+      const next: FormValues = { ...prev, [name]: v };
+      for (const f of fields) if (f.resetOn?.includes(name) && prev[name] !== v) next[f.name] = "";
+      return next;
+    });
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -163,6 +190,13 @@ export function RecordForm({
           if (f.showIf && !f.showIf(values)) return null;
           const common = { label: f.label, error: errors[f.name], hint: f.hint, required: f.required };
           const val = values[f.name];
+          if (f.type === "custom" && f.render) {
+            return (
+              <div key={f.name} className="sm:col-span-2">
+                {f.render({ value: String(val ?? ""), set: (v) => set(f.name, v), error: errors[f.name], values, initial })}
+              </div>
+            );
+          }
           if (f.type === "checkbox") {
             return (
               <div key={f.name} className="sm:col-span-2">

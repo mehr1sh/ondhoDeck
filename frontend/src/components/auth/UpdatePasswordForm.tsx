@@ -64,7 +64,7 @@ export function UpdatePasswordForm() {
   if (ready === "missing") {
     return (
       <div className="space-y-3" role="alert">
-        <h1 className="text-lg font-semibold text-slate-900">Reset link invalid or expired</h1>
+        <h1 className="font-display text-[1.35rem] leading-snug text-ink">Reset link invalid or expired</h1>
         <p className="text-sm text-slate-700">
           Open the most recent reset email from this browser, or request a new link.
         </p>
@@ -77,7 +77,7 @@ export function UpdatePasswordForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4" aria-labelledby="update-title">
-      <h1 id="update-title" className="text-lg font-semibold text-slate-900">
+      <h1 id="update-title" className="font-display text-[1.35rem] leading-snug text-ink">
         Choose a new password
       </h1>
       {formError && (

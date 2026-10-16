@@ -1,11 +1,15 @@
 "use client";
 
+import Link from "next/link";
 import { Badge } from "@/components/ui";
+import { FundPicker } from "@/components/funds/FundPicker";
 import { itemsOf } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
 import { EMPTY, formatDate, formatMoney, formatPercent, humanize } from "@/lib/format";
 import {
   ASSET_KINDS,
+  ASSET_KIND_FUND_TYPE,
+  type AssetKind,
   CASH_FLOW_KINDS,
   EVENT_KINDS,
   LIABILITY_KINDS,
@@ -36,6 +40,22 @@ export const ASSET_FIELDS: FieldDef[] = [
     type: "money",
     hint: "Remaining commitment that can be called.",
     showIf: (v) => v.kind === "private_fund_commitment",
+  },
+  {
+    name: "fund_id",
+    label: "Library fund",
+    type: "custom",
+    resetOn: ["kind"],
+    showIf: (v) => Boolean(ASSET_KIND_FUND_TYPE[v.kind as AssetKind]),
+    render: ({ value, set, error, values, initial }) => (
+      <FundPicker
+        fundType={ASSET_KIND_FUND_TYPE[values.kind as AssetKind]!}
+        value={value}
+        initialName={initial && initial.fund_id === value ? (initial.fund_name as string | null | undefined) : null}
+        onChange={set}
+        error={error}
+      />
+    ),
   },
   { name: "pledged_to_sbl", label: "Pledged to securities-backed line", type: "checkbox" },
   { name: "liquidity_notes", label: "Liquidity notes", type: "textarea", maxLength: 2000 },
@@ -98,6 +118,17 @@ export function AssetsSection({ householdId, canEdit }: { householdId: string; c
       columns={[
         { header: "Name", render: (r) => r.name },
         { header: "Kind", render: (r) => humanize(r.kind) },
+        {
+          header: "Library fund",
+          render: (r) =>
+            r.fund_id ? (
+              <Link href={`/funds/${r.fund_id}`} className="underline-offset-2 hover:underline">
+                {r.fund_name ?? "Linked fund"}
+              </Link>
+            ) : (
+              EMPTY
+            ),
+        },
         { header: "Amount", numeric: true, render: (r) => formatMoney(r.amount, r.currency) },
         { header: "Currency", render: (r) => r.currency },
         {

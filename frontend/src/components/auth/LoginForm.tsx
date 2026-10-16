@@ -63,8 +63,8 @@ export function LoginForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4" aria-labelledby="login-title">
-      <h1 id="login-title" className="text-lg font-semibold text-slate-900">
-        Sign in to SlipSlopes
+      <h1 id="login-title" className="font-display text-[1.35rem] leading-snug text-ink">
+        Sign in to OndhoDeck
       </h1>
       {reason === "expired" && (
         <Notice tone="warning">Your session expired. Please sign in again.</Notice>

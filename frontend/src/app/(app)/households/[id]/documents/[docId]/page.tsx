@@ -26,6 +26,7 @@ import { useHousehold } from "@/components/household/HouseholdContext";
 import { useToast } from "@/components/Toast";
 import { itemsOf, resolveApiUrl } from "@/lib/api";
 import { endpoints } from "@/lib/endpoints";
+import { extractionMethodLabel } from "@/lib/extraction";
 import { EMPTY, formatBytes, formatDateTime, humanize } from "@/lib/format";
 import { describeError, useApiQuery, usePolling } from "@/lib/hooks";
 import { ACTIVE_DOC_STATUSES, phaseForDocument, POLL_INTERVAL_MS } from "@/lib/upload";
@@ -104,7 +105,7 @@ export default function DocumentDetailPage() {
           <Link href={`/households/${household.id}/documents`} className="text-xs text-slate-600 hover:underline">
             ← Documents
           </Link>
-          <h2 className="mt-1 flex flex-wrap items-center gap-2 break-all text-lg font-semibold text-slate-900">
+          <h2 className="mt-1 flex flex-wrap items-center gap-2 break-all font-display text-[1.35rem] leading-snug text-ink">
             {d.original_filename} <DocumentStatusBadge status={d.status} /> {d.is_demo_fixture && <SyntheticBadge />}
           </h2>
         </div>
@@ -160,6 +161,7 @@ export default function DocumentDetailPage() {
             ["Pages without text", d.pages_without_text ?? EMPTY],
             ["OCR pages", d.ocr_pages ?? EMPTY],
             ["Constraints", d.constraint_count ?? 0],
+            ["Extraction method", d.latest_job ? (extractionMethodLabel(d.latest_job) ?? EMPTY) : EMPTY],
             ["Uploaded", formatDateTime(d.created_at)],
             ["Updated", formatDateTime(d.updated_at)],
             ["SHA-256", <code key="sha" className="break-all font-mono text-xs">{d.sha256 ?? EMPTY}</code>],
@@ -193,7 +195,7 @@ export default function DocumentDetailPage() {
                   <th className={th}>Status</th>
                   <th className={th}>Stage</th>
                   <th className={thNum}>Progress</th>
-                  <th className={th}>Method</th>
+                  <th className={th}>Extraction method</th>
                   <th className={th}>Started</th>
                   <th className={th}>Finished</th>
                   <th className={th}>Error</th>
@@ -210,7 +212,7 @@ export default function DocumentDetailPage() {
                     </td>
                     <td className={td}>{j.stage ? humanize(j.stage) : EMPTY}</td>
                     <td className={tdNum}>{j.progress}%</td>
-                    <td className={td}>{j.extraction_method ? humanize(j.extraction_method) : EMPTY}</td>
+                    <td className={td}>{extractionMethodLabel(j) ?? EMPTY}</td>
                     <td className={td}>{formatDateTime(j.started_at)}</td>
                     <td className={td}>{formatDateTime(j.finished_at)}</td>
                     <td className={td}>{j.error_message ?? EMPTY}</td>

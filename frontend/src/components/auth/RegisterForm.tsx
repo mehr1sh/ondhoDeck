@@ -57,10 +57,10 @@ export function RegisterForm() {
   if (checkEmail) {
     return (
       <div className="space-y-3" role="status">
-        <h1 className="text-lg font-semibold text-slate-900">Check your email</h1>
+        <h1 className="font-display text-[1.35rem] leading-snug text-ink">Check your email</h1>
         <p className="text-sm text-slate-700">
           We sent a confirmation link to <strong className="break-all">{checkEmail}</strong>. Open it to
-          activate your SlipSlopes account, then sign in.
+          activate your OndhoDeck account, then sign in.
         </p>
         <p className="text-xs text-slate-600">
           Didn&apos;t receive it? Check your spam folder, or try registering again in a few minutes.
@@ -74,8 +74,8 @@ export function RegisterForm() {
 
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-4" aria-labelledby="register-title">
-      <h1 id="register-title" className="text-lg font-semibold text-slate-900">
-        Create your SlipSlopes account
+      <h1 id="register-title" className="font-display text-[1.35rem] leading-snug text-ink">
+        Create your OndhoDeck account
       </h1>
       {formError && (
         <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-900">

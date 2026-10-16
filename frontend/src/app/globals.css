@@ -1,9 +1,83 @@
 @import "tailwindcss";
 
+/*
+ * OndhoDeck design tokens.
+ *
+ * Semantic tokens (page, surface, ink, line, accent, risk, caution) are the source of truth. The Tailwind
+ * "slate", "lime" and "emerald" scales are re-pointed at the same warm-neutral / muted-green palette so that
+ * every existing utility class follows the theme consistently.
+ */
 @theme {
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-serif: "Source Serif 4", "Source Serif Pro", Georgia, "Times New Roman", serif;
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-  --color-accent: #a3e635;
+
+  /* Semantic colours */
+  --color-page: #f7f6f2;
+  --color-surface: #ffffff;
+  --color-surface-muted: #f3f2ed;
+  --color-ink: #1e2430;
+  --color-ink-2: #3c4350;
+  --color-ink-3: #646b76;
+  --color-line: #e3e1db;
+  --color-line-strong: #cfccc4;
+  --color-accent: #2f6b4f;
+  --color-accent-hover: #275a42;
+  --color-accent-subtle: #e6efe9;
+  --color-accent-ink: #1f4a36;
+  --color-risk: #9b2c2c;
+  --color-risk-subtle: #f8ecea;
+  --color-caution: #8a5a12;
+  --color-caution-subtle: #f8f0e1;
+
+  /* Warm neutral scale (replaces the cool slate defaults) */
+  --color-slate-50: #f7f6f2;
+  --color-slate-100: #f3f2ed;
+  --color-slate-200: #e3e1db;
+  --color-slate-300: #cfccc4;
+  --color-slate-400: #a8a29a;
+  --color-slate-500: #6b717b;
+  --color-slate-600: #575e69;
+  --color-slate-700: #3c4350;
+  --color-slate-800: #2b313c;
+  --color-slate-900: #1e2430;
+  --color-slate-950: #151a23;
+
+  /* Muted green accent scale (replaces lime) */
+  --color-lime-50: #f2f6f3;
+  --color-lime-100: #e8efe9;
+  --color-lime-200: #d3e0d6;
+  --color-lime-300: #a9c2b0;
+  --color-lime-400: #6f9a7c;
+  --color-lime-500: #2f6b4f;
+  --color-lime-600: #275a42;
+  --color-lime-700: #1f4a36;
+
+  /* Positive states share the accent family */
+  --color-emerald-50: #eef4ef;
+  --color-emerald-200: #c9dacd;
+  --color-emerald-300: #a9c2b0;
+  --color-emerald-700: #275a42;
+  --color-emerald-800: #1f4a36;
+  --color-emerald-900: #223c2c;
+
+  /* Near-square geometry: every rounded-* utility resolves to a 2px corner. */
+  --radius-xs: 2px;
+  --radius-sm: 2px;
+  --radius-md: 2px;
+  --radius-lg: 2px;
+  --radius-xl: 2px;
+  --radius: 2px;
+
+  /* No elevation: surfaces are separated by hairline rules only. */
+  --shadow-sm: 0 0 0 1px var(--color-line);
+  --shadow-md: 0 0 0 1px var(--color-line);
+  --shadow-lg: 0 0 0 1px var(--color-line);
+
+  /* Restrained info tone */
+  --color-sky-50: #eff3f5;
+  --color-sky-200: #cdd8de;
+  --color-sky-800: #34505e;
 }
 
 :root {
@@ -12,19 +86,56 @@
 
 html,
 body {
-  background: #f1f5f9;
-  color: #0f172a;
+  background: var(--color-page);
+  color: var(--color-ink);
 }
 
 body {
   font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
+}
+
+/* Money and counts line up in columns */
+.tabular-nums,
+td,
+th {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Evidence highlighting */
 mark {
-  background: #d9f99d;
-  color: #0f172a;
+  background: #f3e3b3;
+  color: var(--color-ink);
   padding: 0 1px;
   border-radius: 2px;
+}
+
+:focus-visible {
+  outline-color: var(--color-accent);
+}
+
+@layer components {
+  /* Display type: page titles and section headings. */
+  .font-display {
+    font-family: var(--font-serif);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+  }
+
+  /* Evidence quotations read as quoted text, not UI chrome. */
+  .evidence-quote {
+    font-family: var(--font-serif);
+    font-size: 0.975rem;
+    line-height: 1.65;
+    color: var(--color-ink);
+  }
+
+  /* Small-print disclosures (footnote style). */
+  .small-print {
+    font-size: 0.75rem;
+    line-height: 1.5;
+    color: var(--color-ink-3);
+  }
 }

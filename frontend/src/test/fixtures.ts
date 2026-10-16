@@ -1,0 +1,82 @@
+/** Shared API fixtures for component tests. */
+export function term(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "t1",
+    household_id: null,
+    fund_id: "f1",
+    document_id: "d1",
+    document_name: "Prospectus_2026.pdf",
+    revision: 2,
+    constraint_type: "redemption_limit",
+    asset_key: "non_traded_reit",
+    description: "Quarterly redemption cap",
+    value: "5.0",
+    lower_bound: null,
+    upper_bound: null,
+    original_value: "5.0",
+    unit: "percent_of_nav",
+    timing: "quarterly",
+    conditions: null,
+    pdf_page: 12,
+    printed_page: "10",
+    document_section: "Share repurchase plan",
+    evidence_quote: "limited to 5% of the aggregate NAV per quarter",
+    quote_verified: true,
+    corroborating_pages: [],
+    interpretation: "Cap of 5% of NAV per quarter",
+    value_kind: "maximum",
+    exceptions: [],
+    discretion: null,
+    effective_period: null,
+    ambiguous: false,
+    validation_issues: [],
+    confidence: "high",
+    source_type: "source_backed",
+    review_status: "confirmed",
+    extraction_method: "rules",
+    provider: null,
+    model: null,
+    is_qualitative: false,
+    reviewed_by: null,
+    reviewed_at: null,
+    effective_from: "2026-03-01",
+    effective_to: null,
+    superseded_by_id: null,
+    updated_at: "2026-03-01T00:00:00Z",
+    ...overrides,
+  };
+}
+
+export function fund(overrides: Record<string, unknown> = {}) {
+  return {
+    id: "f1",
+    firm_id: "firm1",
+    name: "Example Income REIT",
+    fund_type: "non_traded_reit",
+    issuer: "Example Sponsor",
+    ticker: "EXRT",
+    share_class: "Class I",
+    sec_cik: "123456",
+    aliases: [],
+    description: null,
+    metadata_status: "verified",
+    status: "active",
+    created_at: "2026-01-01T00:00:00Z",
+    updated_at: "2026-01-01T00:00:00Z",
+    document_count: 2,
+    approved_term_count: 3,
+    pending_term_count: 1,
+    ...overrides,
+  };
+}
+
+export function fundDetail(role: string, overrides: Record<string, unknown> = {}) {
+  return {
+    ...fund(),
+    your_role: role,
+    documents: [],
+    linked_holdings: [],
+    linked_holdings_total: 0,
+    ...overrides,
+  };
+}

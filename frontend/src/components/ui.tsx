@@ -5,7 +5,9 @@ import {
   forwardRef,
   useEffect,
   useId,
+  useMemo,
   useRef,
+  useState,
   type ButtonHTMLAttributes,
   type InputHTMLAttributes,
   type ReactNode,
@@ -22,15 +24,15 @@ export function cx(...parts: Array<string | false | null | undefined>): string {
 
 type Variant = "primary" | "secondary" | "danger" | "ghost" | "accent";
 const variantClass: Record<Variant, string> = {
-  primary: "bg-slate-800 text-white hover:bg-slate-700 border-slate-800",
-  accent: "bg-lime-400 text-slate-900 hover:bg-lime-300 border-lime-500",
-  secondary: "bg-white text-slate-800 hover:bg-slate-50 border-slate-300",
-  danger: "bg-red-700 text-white hover:bg-red-600 border-red-700",
-  ghost: "bg-transparent text-slate-700 hover:bg-slate-100 border-transparent",
+  primary: "bg-accent text-white hover:bg-accent-hover border-accent",
+  accent: "bg-accent text-white hover:bg-accent-hover border-accent",
+  secondary: "bg-surface text-ink hover:bg-surface-muted border-ink-3/70",
+  danger: "bg-risk text-white hover:bg-[#832424] border-risk",
+  ghost: "bg-transparent text-ink-2 hover:bg-surface-muted border-transparent",
 };
 
 const buttonBase =
-  "inline-flex items-center justify-center gap-2 rounded-md border px-3 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-slate-700 disabled:cursor-not-allowed disabled:opacity-50";
+  "inline-flex items-center justify-center gap-2 rounded-sm border px-3.5 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent disabled:cursor-not-allowed disabled:opacity-50";
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: Variant;
@@ -119,8 +121,8 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="rounded-lg border border-dashed border-slate-300 bg-white px-6 py-10 text-center">
-      <h3 className="text-base font-semibold text-slate-800">{title}</h3>
+    <div className="rounded-sm border border-line bg-surface px-6 py-10 text-center">
+      <h3 className="font-display text-lg text-ink">{title}</h3>
       {children && <div className="mx-auto mt-2 max-w-prose text-sm text-slate-600">{children}</div>}
       {action && <div className="mt-4 flex flex-wrap justify-center gap-2">{action}</div>}
     </div>
@@ -131,24 +133,24 @@ export function ErrorState({ error, onRetry }: { error: unknown; onRetry?: () =>
   const d = describeError(error);
   if (d.status === 404) {
     return (
-      <div role="alert" className="rounded-lg border border-slate-200 bg-white px-6 py-10 text-center">
+      <div role="alert" className="rounded-sm border border-line bg-surface px-6 py-10 text-center">
         <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">404</p>
-        <h2 className="mt-1 text-lg font-semibold text-slate-900">Not found</h2>
+        <h2 className="font-display mt-1 text-xl text-ink">Not found</h2>
         <p className="mt-2 text-sm text-slate-600">
           This item does not exist or you do not have access to it.
         </p>
         <div className="mt-4">
-          <LinkButton href="/">Back to dashboard</LinkButton>
+          <LinkButton href="/">Back to overview</LinkButton>
         </div>
       </div>
     );
   }
   return (
-    <div role="alert" className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-900">
+    <div role="alert" className="rounded-md border border-risk/30 bg-risk-subtle px-4 py-3 text-sm text-risk">
       <p className="font-semibold">{d.title}</p>
       <p className="mt-1">{d.message}</p>
       {d.requestId && (
-        <p className="mt-1 text-xs text-red-800">
+        <p className="mt-1 text-xs">
           Request ID: <code className="font-mono">{d.requestId}</code>
         </p>
       )}
@@ -171,10 +173,10 @@ export function Notice({
   children: ReactNode;
 }) {
   const tones = {
-    info: "border-slate-300 bg-slate-50 text-slate-800",
-    warning: "border-amber-300 bg-amber-50 text-amber-900",
-    success: "border-emerald-300 bg-emerald-50 text-emerald-900",
-    danger: "border-red-300 bg-red-50 text-red-900",
+    info: "border-line bg-surface-muted text-ink-2",
+    warning: "border-caution/30 bg-caution-subtle text-caution",
+    success: "border-accent/30 bg-accent-subtle text-accent-ink",
+    danger: "border-risk/30 bg-risk-subtle text-risk",
   } as const;
   return (
     <div className={cx("rounded-md border px-3 py-2 text-sm", tones[tone])}>
@@ -188,20 +190,29 @@ export function Notice({
 
 export type BadgeTone = "neutral" | "info" | "success" | "warning" | "danger" | "accent";
 const badgeTones: Record<BadgeTone, string> = {
-  neutral: "bg-slate-100 text-slate-700 ring-slate-300",
+  neutral: "bg-surface-muted text-ink-2 ring-line-strong",
   info: "bg-sky-50 text-sky-800 ring-sky-200",
-  success: "bg-emerald-50 text-emerald-800 ring-emerald-200",
-  warning: "bg-amber-50 text-amber-900 ring-amber-200",
-  danger: "bg-red-50 text-red-800 ring-red-200",
-  accent: "bg-lime-200 text-slate-900 ring-lime-400",
+  success: "bg-accent-subtle text-accent-ink ring-accent/30",
+  warning: "bg-caution-subtle text-caution ring-caution/30",
+  danger: "bg-risk-subtle text-risk ring-risk/30",
+  accent: "bg-accent-subtle text-accent-ink ring-accent/40",
 };
+
+/** Status label with a restrained tone; the text always carries the meaning. */
+export function StatusBadge({ tone = "neutral", label, title }: { tone?: BadgeTone; label: string; title?: string }) {
+  return (
+    <Badge tone={tone} title={title}>
+      {label}
+    </Badge>
+  );
+}
 
 export function Badge({ tone = "neutral", children, title }: { tone?: BadgeTone; children: ReactNode; title?: string }) {
   return (
     <span
       title={title}
       className={cx(
-        "inline-flex items-center whitespace-nowrap rounded px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset",
+        "inline-flex items-center whitespace-nowrap rounded-sm px-1.5 py-0.5 text-xs font-medium ring-1 ring-inset",
         badgeTones[tone],
       )}
     >
@@ -214,10 +225,10 @@ export function Badge({ tone = "neutral", children, title }: { tone?: BadgeTone;
 
 export function Card({ title, actions, children, className }: { title?: ReactNode; actions?: ReactNode; children: ReactNode; className?: string }) {
   return (
-    <section className={cx("rounded-lg border border-slate-200 bg-white shadow-sm", className)}>
+    <section className={cx("rounded-md border border-line bg-surface", className)}>
       {(title || actions) && (
-        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 px-4 py-3">
-          {title && <h2 className="text-sm font-semibold text-slate-900">{title}</h2>}
+        <header className="flex flex-wrap items-center justify-between gap-2 border-b border-line px-4 py-3">
+          {title && <h2 className="font-display text-base text-ink">{title}</h2>}
           {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
         </header>
       )}
@@ -226,26 +237,330 @@ export function Card({ title, actions, children, className }: { title?: ReactNod
   );
 }
 
-export function PageHeader({ title, description, actions }: { title: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+export function PageHeader({
+  title,
+  description,
+  actions,
+  eyebrow,
+  level = 1,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  actions?: ReactNode;
+  /** Small context line above the title (e.g. breadcrumbs). */
+  eyebrow?: ReactNode;
+  /** Heading level; nested pages inside a household frame use 2. */
+  level?: 1 | 2;
+}) {
+  const H = level === 1 ? "h1" : "h2";
   return (
-    <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+    <div className="mb-6 flex flex-wrap items-end justify-between gap-x-6 gap-y-3 border-b border-line pb-5">
       <div className="min-w-0">
-        <h1 className="text-xl font-semibold text-slate-900">{title}</h1>
-        {description && <div className="mt-1 text-sm text-slate-600">{description}</div>}
+        {eyebrow && <div className="mb-1 text-xs text-ink-3">{eyebrow}</div>}
+        <H className={cx("font-display text-ink", level === 1 ? "text-[1.75rem] leading-tight" : "text-[1.35rem] leading-snug")}>
+          {title}
+        </H>
+        {description && <div className="mt-1.5 max-w-3xl text-sm text-ink-3">{description}</div>}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
     </div>
   );
 }
 
+/** A titled content section separated by a hairline rule (no card chrome). */
+export function Section({
+  title,
+  description,
+  action,
+  children,
+  id,
+  className,
+}: {
+  title: ReactNode;
+  description?: ReactNode;
+  action?: ReactNode;
+  children: ReactNode;
+  id?: string;
+  className?: string;
+}) {
+  const auto = useId();
+  const headingId = id ?? auto;
+  return (
+    <section aria-labelledby={headingId} className={cx("space-y-3", className)}>
+      <div className="flex flex-wrap items-end justify-between gap-2 border-b border-line pb-2">
+        <div className="min-w-0">
+          <h2 id={headingId} className="font-display text-lg text-ink">
+            {title}
+          </h2>
+          {description && <p className="mt-0.5 text-sm text-ink-3">{description}</p>}
+        </div>
+        {action && <div className="flex flex-wrap items-center gap-2 text-sm">{action}</div>}
+      </div>
+      {children}
+    </section>
+  );
+}
+
+/** Breadcrumb trail. The last item is the current page. */
+export function Breadcrumbs({ items }: { items: Array<{ label: ReactNode; href?: string }> }) {
+  return (
+    <nav aria-label="Breadcrumb" className="text-xs text-ink-3">
+      <ol className="flex flex-wrap items-center gap-1">
+        {items.map((it, i) => {
+          const last = i === items.length - 1;
+          return (
+            <li key={i} className="flex items-center gap-1">
+              {it.href && !last ? (
+                <Link href={it.href} className="underline-offset-2 hover:text-ink hover:underline">
+                  {it.label}
+                </Link>
+              ) : (
+                <span aria-current={last ? "page" : undefined} className={last ? "text-ink-2" : undefined}>
+                  {it.label}
+                </span>
+              )}
+              {!last && <span aria-hidden="true">/</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+/** Small-print footnote, e.g. "Modelled projection — not a guaranteed outcome." */
+export function Disclosure({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cx("small-print border-t border-line pt-2", className)}>{children}</div>;
+}
+
+// ----------------------------------------------------------------------------- workflow
+
+export type StepState = "done" | "current" | "attention" | "todo" | "blocked";
+
+export interface WorkflowStep {
+  key: string;
+  label: string;
+  state: StepState;
+  /** Short status text derived from real data, e.g. "3 documents, 1 failed". */
+  detail?: string;
+  href?: string;
+}
+
+const STEP_STATE_LABEL: Record<StepState, string> = {
+  done: "Complete",
+  current: "Next",
+  attention: "Needs attention",
+  todo: "Not started",
+  blocked: "Waiting on an earlier step",
+};
+
+/** Horizontal (wrapping) progress strip. Each step shows its state as text, never by colour alone. */
+export function WorkflowProgress({ steps, label = "Workflow progress" }: { steps: WorkflowStep[]; label?: string }) {
+  return (
+    <nav aria-label={label}>
+      <ol className="grid overflow-hidden rounded-sm border-l border-t border-line bg-surface sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        {steps.map((s, i) => {
+          const body = (
+            <>
+              <span className="flex items-center gap-2 text-xs text-ink-3">
+                <span
+                  aria-hidden="true"
+                  className={cx(
+                    "inline-flex h-5 w-5 items-center justify-center rounded-full border text-[11px] tabular-nums",
+                    s.state === "done" && "border-accent bg-accent text-white",
+                    s.state === "current" && "border-ink bg-ink text-white",
+                    s.state === "attention" && "border-caution text-caution",
+                    (s.state === "todo" || s.state === "blocked") && "border-line-strong text-ink-3",
+                  )}
+                >
+                  {s.state === "done" ? "✓" : i + 1}
+                </span>
+                <span
+                  className={cx(
+                    s.state === "attention" && "text-caution",
+                    s.state === "done" && "text-accent-ink",
+                    s.state === "current" && "font-medium text-ink",
+                  )}
+                >
+                  {STEP_STATE_LABEL[s.state]}
+                </span>
+              </span>
+              <span className="mt-1 block text-sm font-medium text-ink">{s.label}</span>
+              {s.detail && <span className="mt-0.5 block text-xs text-ink-3">{s.detail}</span>}
+            </>
+          );
+          return (
+            <li
+              key={s.key}
+              aria-current={s.state === "current" ? "step" : undefined}
+              className={cx("border-b border-r border-line", s.state === "current" ? "bg-accent-subtle/60" : "bg-surface")}
+            >
+              {s.href ? (
+                <Link
+                  href={s.href}
+                  className="block h-full px-3 py-2.5 hover:bg-surface-muted focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-accent"
+                >
+                  {body}
+                </Link>
+              ) : (
+                <div className="h-full px-3 py-2.5">{body}</div>
+              )}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+// ----------------------------------------------------------------------------- tables: sort & filter
+
+export type SortDir = "asc" | "desc";
+export interface SortState<K extends string> {
+  key: K;
+  dir: SortDir;
+}
+
+const isEmpty = (v: unknown) => v === null || v === undefined || v === "";
+
+/** Compares two cell values; empty values always sort last regardless of direction. */
+function compareValues(a: unknown, b: unknown, dir: SortDir): number {
+  if (isEmpty(a) || isEmpty(b)) return isEmpty(a) === isEmpty(b) ? 0 : isEmpty(a) ? 1 : -1;
+  const c =
+    typeof a === "number" && typeof b === "number"
+      ? a - b
+      : String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: "base" });
+  return dir === "asc" ? c : -c;
+}
+
+/** Client-side sorting over already-loaded rows. */
+export function useSortedRows<T, K extends string>(
+  rows: T[],
+  accessors: Record<K, (row: T) => unknown>,
+  initial: SortState<K>,
+) {
+  const [sort, setSort] = useState<SortState<K>>(initial);
+  const accessorsRef = useRef(accessors);
+  accessorsRef.current = accessors;
+  const sorted = useMemo(() => {
+    const get = accessorsRef.current[sort.key];
+    return [...rows].sort((x, y) => compareValues(get(x), get(y), sort.dir));
+  }, [rows, sort]);
+  const toggle = (key: K) =>
+    setSort((s) => (s.key === key ? { key, dir: s.dir === "asc" ? "desc" : "asc" } : { key, dir: "asc" }));
+  return { rows: sorted, sort, toggle };
+}
+
+/** Sortable column header: a button inside the th with aria-sort on the th. */
+export function SortTh<K extends string>({
+  label,
+  sortKey,
+  sort,
+  onSort,
+  numeric,
+}: {
+  label: string;
+  sortKey: K;
+  sort: SortState<K>;
+  onSort: (k: K) => void;
+  numeric?: boolean;
+}) {
+  const active = sort.key === sortKey;
+  return (
+    <th
+      className={numeric ? thNum : th}
+      aria-sort={active ? (sort.dir === "asc" ? "ascending" : "descending") : "none"}
+      scope="col"
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        className={cx(
+          "inline-flex items-center gap-1 uppercase tracking-wide hover:text-ink focus-visible:outline-2 focus-visible:outline-accent",
+          active && "text-ink",
+        )}
+      >
+        {label}
+        <span aria-hidden="true" className="text-[10px]">
+          {active ? (sort.dir === "asc" ? "▲" : "▼") : "↕"}
+        </span>
+      </button>
+    </th>
+  );
+}
+
+/** Compact search input for filtering a table. */
+export function FilterInput({
+  label,
+  value,
+  onChange,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  placeholder?: string;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs font-medium text-ink-3">
+        {label}
+      </label>
+      <input
+        id={id}
+        type="search"
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="block w-full min-w-48 rounded-sm border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink placeholder:text-ink-3 focus:border-accent focus:outline-2 focus:outline-accent"
+      />
+    </div>
+  );
+}
+
+/** Compact select for filtering a table. */
+export function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
+  const id = useId();
+  return (
+    <div className="flex flex-col gap-1">
+      <label htmlFor={id} className="text-xs font-medium text-ink-3">
+        {label}
+      </label>
+      <select
+        id={id}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="block rounded-sm border border-line-strong bg-surface px-2.5 py-1.5 text-sm text-ink focus:border-accent focus:outline-2 focus:outline-accent"
+      >
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
 export function Stat({ label, value, hint, tone }: { label: string; value: ReactNode; hint?: ReactNode; tone?: "danger" | "success" }) {
   return (
-    <div className="rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</p>
+    <div className="border-t border-ink/80 pt-2">
+      <p className="text-xs font-medium text-ink-3">{label}</p>
       <p
         className={cx(
-          "mt-1 text-lg font-semibold tabular-nums",
-          tone === "danger" ? "text-red-700" : tone === "success" ? "text-emerald-700" : "text-slate-900",
+          "mt-0.5 text-base font-semibold tabular-nums",
+          tone === "danger" ? "text-risk" : tone === "success" ? "text-accent" : "text-ink",
         )}
       >
         {value}
@@ -258,18 +573,18 @@ export function Stat({ label, value, hint, tone }: { label: string; value: React
 /** Horizontally scrollable table container. */
 export function TableWrap({ children, label }: { children: ReactNode; label?: string }) {
   return (
-    <div className="overflow-x-auto rounded-lg border border-slate-200 bg-white" role="region" aria-label={label} tabIndex={0}>
+    <div className="overflow-x-auto rounded-md border border-line bg-surface" role="region" aria-label={label} tabIndex={0}>
       {children}
     </div>
   );
 }
 
-export const th = "whitespace-nowrap bg-slate-50 px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-slate-600";
+export const th = "whitespace-nowrap border-b border-line bg-surface-muted px-3 py-2 text-left text-xs font-semibold uppercase tracking-wide text-ink-3";
 export const thNum = cx(th, "text-right");
-export const td = "px-3 py-2 align-top text-sm text-slate-800";
-export const tdNum = "px-3 py-2 align-top text-right text-sm tabular-nums whitespace-nowrap text-slate-800";
-export const tableClass = "min-w-full divide-y divide-slate-200";
-export const tbodyClass = "divide-y divide-slate-100";
+export const td = "px-3 py-2 align-top text-sm text-ink";
+export const tdNum = "px-3 py-2 align-top text-right text-sm tabular-nums whitespace-nowrap text-ink";
+export const tableClass = "min-w-full divide-y divide-line";
+export const tbodyClass = "divide-y divide-line";
 
 // ----------------------------------------------------------------------------- forms
 
@@ -314,7 +629,7 @@ function FieldShell({ id, label, error, hint, required, children, badge }: Field
 }
 
 const inputClass =
-  "block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm placeholder:text-slate-400 focus:border-slate-600 focus:outline-2 focus:outline-slate-600 disabled:bg-slate-100 aria-[invalid=true]:border-red-600";
+  "block w-full rounded-md border border-line-strong bg-surface px-3 py-2 text-sm text-ink placeholder:text-slate-400 focus:border-accent focus:outline-2 focus:outline-accent disabled:bg-surface-muted aria-[invalid=true]:border-risk";
 
 function describedBy(id: string, error?: string | null, hint?: ReactNode) {
   if (error) return `${id}-error`;
@@ -427,7 +742,7 @@ export function CheckboxField({
           disabled={disabled}
           onChange={(e) => onChange(e.target.checked)}
           aria-describedby={hint ? `${fid}-hint` : undefined}
-          className="h-4 w-4 rounded border-slate-400 text-slate-800 focus:outline-2 focus:outline-slate-600"
+          className="h-4 w-4 rounded border-slate-400 accent-[#2f6b4f] focus:outline-2 focus:outline-accent"
         />
         <label htmlFor={fid} className="text-sm font-medium text-slate-800">
           {label}
@@ -498,17 +813,17 @@ export function Dialog({
   }, [open, onClose]);
   if (!open) return null;
   return (
-    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/40 p-0 sm:items-center sm:p-4">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/30 p-0 sm:items-center sm:p-4">
       <div
         ref={ref}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
         tabIndex={-1}
-        className="max-h-[90vh] w-full overflow-y-auto rounded-t-lg bg-white shadow-xl sm:max-w-lg sm:rounded-lg"
+        className="max-h-[90vh] w-full overflow-y-auto rounded-t-sm border border-line bg-surface sm:max-w-lg sm:rounded-sm"
       >
         <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
-          <h2 id={titleId} className="text-base font-semibold text-slate-900">
+          <h2 id={titleId} className="font-display text-lg text-ink">
             {title}
           </h2>
           <button

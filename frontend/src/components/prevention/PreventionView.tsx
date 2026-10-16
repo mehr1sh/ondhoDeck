@@ -29,6 +29,7 @@ import { endpoints } from "@/lib/endpoints";
 import { EMPTY, formatDateTime, formatMoney, formatNumber, humanize, parseDecimal } from "@/lib/format";
 import { describeError, useApiQuery } from "@/lib/hooks";
 import type { CostAssumptionsIn, PreventionOut, PreventionRequest, RecommendationOut } from "@/lib/types";
+import { RunErrorState } from "@/components/runs/TermConflict";
 
 type CostKey = keyof CostAssumptionsIn | "cash_buffer";
 
@@ -191,7 +192,7 @@ function PlanResult({
 
       <Card title="Single actions, ranked by the planner">
         <p className="mb-3 text-xs text-slate-600">
-          Rankings are computed by the SlipSlopes engine from the cost assumptions above. Costs marked “assumed cost” rely
+          Rankings are computed by the OndhoDeck engine from the cost assumptions above. Costs marked “assumed cost” rely
           on those assumptions rather than observed prices.
         </p>
         {singles.length === 0 ? (
@@ -370,7 +371,7 @@ export function PreventionView({
         <Link href={`/households/${householdId}/scenarios/${scenarioId}`} className="text-xs text-slate-600 hover:underline">
           ← Scenario
         </Link>
-        <h2 className="mt-1 text-lg font-semibold text-slate-900">Prevention planner</h2>
+        <h2 className="font-display mt-1 text-[1.35rem] leading-snug text-ink">Prevention planner</h2>
         <p className="text-sm text-slate-600">
           Ranks actions that could prevent the projected shortfall and proposes a combination verified by re-simulation.
           Nothing changes until you approve an action and apply it as a new scenario.
@@ -380,7 +381,7 @@ export function PreventionView({
       {canEdit && (
         <Card title={<span className="flex items-center gap-2">Cost assumptions <AssumptionBadge /></span>}>
           <form onSubmit={run} noValidate className="space-y-3">
-            {runError ? <ErrorState error={runError} /> : null}
+            <RunErrorState error={runError} />
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {COST_FIELDS.map((f) => (
                 <TextField

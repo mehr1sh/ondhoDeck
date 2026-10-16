@@ -118,9 +118,16 @@ export function formatDate(iso: string | null | undefined): string {
   return new Intl.DateTimeFormat("en-US", { dateStyle: "medium" }).format(d);
 }
 
-/** "non_traded_reit" -> "Non traded reit" */
+const ACRONYMS: Record<string, string> = {
+  reit: "REIT", rsu: "RSU", sbl: "SBL", nav: "NAV", ltv: "LTV", pdf: "PDF", fx: "FX", csv: "CSV", json: "JSON",
+  sec: "SEC", cik: "CIK", sai: "SAI", gp: "GP", lpa: "LPA", llm: "LLM", pct: "%",
+};
+
+/** "non_traded_reit" -> "Non-traded REIT"; "reit_monthly_cap_pct" -> "REIT monthly cap %" */
 export function humanize(key: string): string {
-  const s = key.replace(/_/g, " ").trim();
+  const words = key.replace(/_/g, " ").trim().split(/\s+/).filter(Boolean)
+    .map((w) => ACRONYMS[w.toLowerCase()] ?? w);
+  const s = words.join(" ").replace(/\bnon traded\b/i, (m) => `${m.split(" ")[0]}-traded`);
   return s.charAt(0).toUpperCase() + s.slice(1);
 }
 

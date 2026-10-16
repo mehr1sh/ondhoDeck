@@ -31,6 +31,7 @@ export default function HouseholdsPage() {
     <div>
       <PageHeader
         title="Households"
+        description="Each household holds its financial profile, private agreements, liquidity scenarios and reports."
         actions={
           <LinkButton href="/households/new" variant="primary">
             Create household
@@ -42,8 +43,19 @@ export default function HouseholdsPage() {
       ) : q.error ? (
         <ErrorState error={q.error} onRetry={() => void q.reload()} />
       ) : !q.data || q.data.items.length === 0 ? (
-        <EmptyState title="No households yet" action={<LinkButton href="/households/new" variant="primary">Create household</LinkButton>}>
-          You can also create a demo household with synthetic data from the dashboard.
+        <EmptyState
+          title="No households yet"
+          action={
+            <>
+              <LinkButton href="/households/new" variant="primary">
+                Create household
+              </LinkButton>
+              <LinkButton href="/">Create a demo household from Overview</LinkButton>
+            </>
+          }
+        >
+          Create a household to record assets, obligations and private agreements. A demo household with synthetic data
+          is available from the Overview.
         </EmptyState>
       ) : (
         <>

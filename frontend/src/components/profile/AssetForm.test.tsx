@@ -97,3 +97,58 @@ describe("Asset form", () => {
     expect(within(dialog).getByText(/req-9/)).toBeInTheDocument();
   });
 });
+
+describe("Asset library fund link", () => {
+  it("searches funds of the matching type and sends fund_id", async () => {
+    const reit = {
+      id: "f1", firm_id: "firm1", name: "Example Income REIT", fund_type: "non_traded_reit", issuer: null, ticker: null,
+      share_class: null, sec_cik: null, aliases: [], description: null, metadata_status: "verified", status: "active",
+      created_at: "2026-01-01T00:00:00Z", updated_at: "2026-01-01T00:00:00Z",
+    };
+    const linked = { ...asset, kind: "non_traded_reit", fund_id: "f1", fund_name: "Example Income REIT" };
+    let created = false;
+    const { calls } = installFetch((c) => {
+      if (c.method === "GET" && c.url.startsWith(`${API}/households/h1/assets`))
+        return jsonResponse({ items: created ? [linked] : [], total: created ? 1 : 0, limit: 100, offset: 0 });
+      if (c.method === "GET" && c.url.startsWith(`${API}/funds`)) return jsonResponse({ items: [reit], total: 1, limit: 20, offset: 0 });
+      if (c.method === "POST") {
+        created = true;
+        return jsonResponse(linked, 201);
+      }
+      return undefined;
+    });
+    const user = userEvent.setup();
+    render(<AssetsSection householdId="h1" canEdit />);
+    await user.click(await screen.findByRole("button", { name: "Add asset" }));
+    const dialog = screen.getByRole("dialog");
+    expect(within(dialog).queryByLabelText("Library fund")).not.toBeInTheDocument();
+    await user.selectOptions(within(dialog).getByLabelText(/Kind/), "non_traded_reit");
+    const select = within(dialog).getByLabelText("Library fund");
+    await within(select).findByRole("option", { name: "Example Income REIT" });
+    expect(calls.some((c) => c.url.startsWith(`${API}/funds`) && c.url.includes("fund_type=non_traded_reit"))).toBe(true);
+    await user.selectOptions(select, "f1");
+    await user.type(within(dialog).getByLabelText(/^Name/), "REIT position");
+    await user.type(within(dialog).getByLabelText(/Amount/), "100000");
+    await user.click(within(dialog).getByRole("button", { name: "Add asset" }));
+    await waitFor(() => expect(calls.some((c) => c.method === "POST")).toBe(true));
+    expect(calls.find((c) => c.method === "POST")!.body).toMatchObject({ kind: "non_traded_reit", fund_id: "f1" });
+    expect(await screen.findByRole("link", { name: "Example Income REIT" })).toHaveAttribute("href", "/funds/f1");
+  });
+
+  it("surfaces a 422 about the fund link verbatim", async () => {
+    installFetch((c) => {
+      if (c.method === "GET" && c.url.startsWith(`${API}/funds`)) return jsonResponse({ items: [], total: 0, limit: 20, offset: 0 });
+      if (c.method === "GET") return jsonResponse({ items: [], total: 0, limit: 100, offset: 0 });
+      return errorResponse(422, "validation_error", "A non-traded REIT holding can only link to a non-traded REIT fund.");
+    });
+    const user = userEvent.setup();
+    render(<AssetsSection householdId="h1" canEdit />);
+    await user.click(await screen.findByRole("button", { name: "Add asset" }));
+    const dialog = screen.getByRole("dialog");
+    await user.selectOptions(within(dialog).getByLabelText(/Kind/), "non_traded_reit");
+    await user.type(within(dialog).getByLabelText(/^Name/), "REIT");
+    await user.type(within(dialog).getByLabelText(/Amount/), "10");
+    await user.click(within(dialog).getByRole("button", { name: "Add asset" }));
+    expect(await within(dialog).findByText("A non-traded REIT holding can only link to a non-traded REIT fund.")).toBeInTheDocument();
+  });
+});
