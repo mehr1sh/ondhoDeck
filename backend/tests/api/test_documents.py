@@ -240,3 +240,29 @@ def test_delete_follows_retention_policy(alice, hid, db, settings):
     assert again["id"] != doc["id"] and again["status"] == "extracted"
     actions = [e["action"] for e in alice.get(f"/households/{hid}/audit-events").json()["items"]]
     assert "document.deleted" in actions
+
+
+def test_llm_terms_sharing_a_quote_with_different_values_are_both_kept(alice, hid, monkeypatch):
+    """Two readings of one quote (here 60% and 65%) both go to review; the job must not fail on their identical
+    extraction keys."""
+    quote = "If at any time the outstanding Loan Balance exceeds 60% of the market value of the Collateral"
+
+    def term(value):
+        return {"excerpt_id": "p1-c0", "constraint_type": "sbl_maintenance_threshold", "asset_key": "sbl",
+                "description": "Maintenance threshold", "value": value, "lower_bound": None, "upper_bound": None,
+                "unit": "% LTV", "timing": None, "conditions": None, "exceptions": [], "discretion": None,
+                "value_kind": "exact", "evidence_quote": quote, "interpretation": "LTV trigger",
+                "confidence": "high", "ambiguous": False}
+
+    class MockProvider:
+        name, model = "mock", "mock-model"
+
+        def extract_json(self, system, user, schema):
+            return {"terms": [term(60), term(65)]}
+
+    monkeypatch.setattr("app.services.processing.get_provider", lambda settings: MockProvider())
+    doc, _ = upload(alice, hid, SBL_PDF)
+    assert alice.get(f"/documents/{doc['id']}").json()["status"] == "extracted"
+    values = sorted(float(c["value"]) for c in alice.get(f"/households/{hid}/constraints").json()
+                    if c["constraint_type"] == "sbl_maintenance_threshold")
+    assert values == [60.0, 65.0]
