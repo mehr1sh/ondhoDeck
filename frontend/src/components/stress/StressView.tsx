@@ -146,11 +146,33 @@ function StressResult({ result, currency }: { result: StressOut; currency: strin
   );
 }
 
-const PARAMS: Array<{ key: keyof StressRequest; label: string; hint: string }> = [
-  { key: "max_drawdown", label: "Maximum drawdown to search (%)", hint: "Upper end of the equity drawdown search." },
-  { key: "step", label: "Grid step (%)", hint: "Spacing of the grid search." },
-  { key: "tolerance", label: "Bisection tolerance (%)", hint: "Precision of the boundary." },
+// Inputs are percentages; the API takes fractions. Bounds and defaults mirror StressRequest in
+// backend/app/api_schemas.py, checked here so errors are stated in the units the advisor typed.
+const PARAMS: Array<{
+  key: keyof StressRequest;
+  label: string;
+  hint: string;
+  min: number;
+  minExclusive?: boolean;
+  max: number;
+  default: number;
+}> = [
+  {
+    key: "max_drawdown",
+    label: "Maximum drawdown to search (%)",
+    hint: "Upper end of the equity drawdown search.",
+    min: 0,
+    minExclusive: true,
+    max: 95,
+    default: 60,
+  },
+  { key: "step", label: "Grid step (%)", hint: "Spacing of the grid search.", min: 0.25, max: 10, default: 1 },
+  { key: "tolerance", label: "Bisection tolerance (%)", hint: "Precision of the boundary.", min: 0.01, max: 1, default: 0.05 },
 ];
+
+function rangeText(p: (typeof PARAMS)[number]): string {
+  return p.minExclusive ? `above ${p.min}% and up to ${p.max}%` : `between ${p.min}% and ${p.max}%`;
+}
 
 export function StressView({
   householdId,
@@ -184,7 +206,8 @@ export function StressView({
       const s = inputs[p.key]?.trim();
       if (!s) continue;
       const n = Number(s);
-      if (!Number.isFinite(n) || n <= 0) v[p.key] = "Enter a positive percentage.";
+      const inRange = Number.isFinite(n) && (p.minExclusive ? n > p.min : n >= p.min) && n <= p.max;
+      if (!inRange) v[p.key] = `Enter a percentage ${rangeText(p)}, e.g. ${p.default} for ${p.default}%.`;
       else body[p.key] = Number((n / 100).toPrecision(12));
     }
     setErrors(v);
@@ -232,7 +255,7 @@ export function StressView({
                   placeholder="API default"
                   value={inputs[p.key] ?? ""}
                   error={errors[p.key]}
-                  hint={`${p.hint} Leave blank to use the API default.`}
+                  hint={`${p.hint} Enter a percentage ${rangeText(p)}; leave blank for ${p.default}%.`}
                   onChange={(e) => setInputs((s) => ({ ...s, [p.key]: e.target.value }))}
                 />
               ))}
