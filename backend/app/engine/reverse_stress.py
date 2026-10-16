@@ -9,6 +9,7 @@ the result is "the first failing grid point", not a mathematically exact boundar
 """
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field, replace
 from typing import Any, Optional, cast
 
@@ -77,18 +78,20 @@ def key_events(res: SimulationResult, up_to: int) -> list[dict]:
 
 def reverse_stress(s: Scenario, t: ContractTerms, max_drawdown: float = 0.60,
                    step: float = 0.01, tol: float = 0.0005) -> ReverseStressResult:
-    n = int(round(max_drawdown / step))
+    # The last grid point is max_drawdown itself even when it is not a multiple of step, so a
+    # not-found result means the requested maximum was actually tested.
+    n = math.ceil(max_drawdown / step - 1e-9)
     grid = []
     for i in range(n + 1):
-        d = round(i * step, 6)
+        d = round(min(i * step, max_drawdown), 6)
         r = _run(s, t, d)
         grid.append({"equity_drawdown": d, "min_cash": r.min_cash, "fails": r.has_shortfall,
                      "first_shortfall_month": r.first_shortfall_month})
     fails = [g["fails"] for g in grid]
     first_fail = next((i for i, f in enumerate(fails) if f), None)
     monotone = first_fail is None or all(fails[first_fail:])
-    method = (f"Grid search over equity drawdown 0-{max_drawdown:.0%} in {step:.0%} steps, then bisection "
-              f"to {tol:.2%} between the last passing and first failing grid points.")
+    method = (f"Grid search over equity drawdown 0-{max_drawdown * 100:g}% in {step * 100:g}% steps, then "
+              f"bisection to {tol * 100:g}% between the last passing and first failing grid points.")
     if not monotone:
         method += (" Pass/fail was NOT monotone on the grid, so this is the first failing point "
                    "found, not a guaranteed exact boundary.")

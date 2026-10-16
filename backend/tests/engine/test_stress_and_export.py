@@ -36,6 +36,18 @@ def test_reverse_stress_handles_never_failing_scenario():
     assert not r.found and r.boundary_drawdown is None and r.first_shortfall_month is None
 
 
+def test_reverse_stress_grid_ends_at_requested_maximum():
+    s = Scenario(cash=2_000_000, capital_calls=[], rsu_vests=[], sbl_loan_balance=0)
+    r = reverse_stress(s, ContractTerms(), max_drawdown=0.25, step=0.1)
+    assert [g["equity_drawdown"] for g in r.grid] == [0.0, 0.1, 0.2, 0.25]
+    assert not r.found and r.last_safe_drawdown == 0.25
+    r = reverse_stress(s, ContractTerms(), max_drawdown=0.25, step=0.07)
+    assert [g["equity_drawdown"] for g in r.grid] == [0.0, 0.07, 0.14, 0.21, 0.25]
+    r = reverse_stress(s, ContractTerms(), max_drawdown=0.05, step=0.0025, tol=0.0001)
+    assert len(r.grid) == 21 and r.grid[-1]["equity_drawdown"] == 0.05
+    assert "0-5% in 0.25% steps" in r.method and "bisection to 0.01%" in r.method
+
+
 def test_prevention_plan_is_verified_by_resimulation():
     s, t = demo_scenario(), ContractTerms()
     plan = plan_prevention(s, t)
